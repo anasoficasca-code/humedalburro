@@ -1448,20 +1448,24 @@
       modernRoadMesh.geometry.setIndex(idxRR); modernRoadMesh.geometry.setDrawRange(0, B.total); modernRoadMesh.visible = B.total > 0;
     }
   }
-  // Igual que camParaPunto, pero el punto queda en el centro del espacio que deja libre la barra historica (arriba de ella)
+  // Igual que camParaPunto, pero el punto queda en el centro del espacio libre: a la derecha del panel izquierdo y sobre la barra de epocas
   function camParaPuntoArriba(gx, gz, off, ty, zoom) {
     const base = camParaPunto(gx, gz, off, ty);
-    const H = window.innerHeight || 720, libre = (H - 300) / 2, ndcY = 1 - 2 * libre / H;
+    const W = window.innerWidth || 1280, H = window.innerHeight || 720;
+    const ndcX = 330 / W, ndcY = 70 / H; // centro del espacio libre en coordenadas normalizadas de pantalla
     const tmp = camera.clone(); tmp.zoom = zoom;
-    const medir = dz => {
-      tmp.position.copy(base.pos); tmp.position.z += dz;
-      const t = base.target.clone(); t.z += dz;
+    const medir = (dx, dz) => {
+      tmp.position.copy(base.pos); tmp.position.x += dx; tmp.position.z += dz;
+      const t = base.target.clone(); t.x += dx; t.z += dz;
       tmp.lookAt(t); tmp.updateProjectionMatrix(); tmp.updateMatrixWorld(true);
-      return new THREE.Vector3(gx, 0, gz).project(tmp).y;
+      const v = new THREE.Vector3(gx, 0, gz).project(tmp); return [v.x, v.y];
     };
-    const y0 = medir(0), k = medir(1) - y0;
-    const dz = Math.abs(k) > 1e-9 ? (ndcY - y0) / k : 0;
-    base.pos.z += dz; base.target.z += dz;
+    const [x0, y0] = medir(0, 0), [xa, ya] = medir(1, 0), [xb, yb] = medir(0, 1);
+    const a11 = xa - x0, a12 = xb - x0, a21 = ya - y0, a22 = yb - y0, det = a11 * a22 - a12 * a21;
+    if (Math.abs(det) > 1e-12) {
+      const rx = ndcX - x0, ry = ndcY - y0, dx = (rx * a22 - a12 * ry) / det, dz = (a11 * ry - a21 * rx) / det;
+      base.pos.x += dx; base.pos.z += dz; base.target.x += dx; base.target.z += dz;
+    }
     return base;
   }
   // Camara que deja un punto del suelo (gx, gz) en el centro de la pantalla, conservando el angulo de vista "off"
