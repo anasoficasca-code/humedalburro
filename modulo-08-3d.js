@@ -325,8 +325,8 @@
   const cowInstances = [];
   // Vacas alrededor de cada humedal: siempre por FUERA del agua, sobre el pasto, con una holgura para que al caminar no entren.
   const COW_FRACTION = { 1950: 1, 1956: 1 }; // vacas solo en 1950 y 1956; desde 1972 ya no hay
-  const COW_TOTALS = { Burro: 70, Vaca: 70, Techo: 50 };
-  const COW_SCALE = 2.3; // chicas, pero todavia visibles a la distancia de la vista axonometrica
+  const COW_TOTALS = { Burro: 92, Vaca: 108, Techo: 64 };
+  const COW_SCALE = 2.65; // chicas, pero todavia visibles a la distancia de la vista axonometrica
   const COW_MARGEN = 6;  // distancia minima al agua (unidades de escena)
   let lastOutlines = [];
   function createCows() { cowsGroup.clear(); cowInstances.length = 0; } // se colocan al construir los humedales
@@ -566,7 +566,8 @@
       const ptsOriginal = w.pts;
       const baseArea = polyArea(ptsOriginal);
       if (baseArea <= 0) return;
-      if (name.includes("Vaca") && baseArea < 20000) return;
+      // La Vaca tiene dos sectores separados en la cartografía: se conservan ambos
+      // para que en 1972 no desaparezca el sector norte junto a Corabastos.
 
       const cx = ptsOriginal.reduce((s, p) => s + p[0], 0) / ptsOriginal.length;
       const cy = ptsOriginal.reduce((s, p) => s + p[1], 0) / ptsOriginal.length;
@@ -586,24 +587,33 @@
         expandedPts = smoothed.map(p => [scx + (p[0] - scx) * k, scy + (p[1] - scy) * k]);
       } else if (name.includes("Vaca")) {
         yLayer = 0.025;
-        const scaleBase = Math.sqrt(targetAreaVaca / baseArea);
-        const dx = burroCx - cx, dy = burroCy - cy;
-        const dist = Math.hypot(dx, dy) || 1;
-        const ux = dx / dist, uy = dy / dist;
-
-        const transformed = ptsOriginal.map(p => {
-          const px = p[0] - cx, py = p[1] - cy;
-          const proj = px * ux + py * uy;
-          const perp_x = px - proj * ux, perp_y = py - proj * uy;
-          const newProj = proj * (scaleBase * 1.30) + dist * 0.25;
-          const newPerpX = perp_x * (scaleBase * 0.769);
-          const newPerpY = perp_y * (scaleBase * 0.769);
-          return [cx + newProj * ux + newPerpX, cy + newProj * uy + newPerpY];
-        });
-
+        // En 1972 se mantiene la posición real de cada sector de La Vaca:
+        // el sector principal queda junto a Corabastos y el sector norte no se
+        // desplaza artificialmente hacia El Burro. El segundo sector recibe
+        // una ampliación proporcional para que se entienda el antiguo ámbito.
+        const esSectorNorte = baseArea < 20000;
+        const areaObjetivo = year === 1972 ? (esSectorNorte ? 220000 : targetAreaVaca) : targetAreaVaca;
+        const scaleBase = Math.sqrt(areaObjetivo / baseArea);
+        let transformed;
+        if (year === 1972) {
+          transformed = ptsOriginal.map(p => [cx + (p[0] - cx) * scaleBase, cy + (p[1] - cy) * scaleBase]);
+        } else {
+          const dx = burroCx - cx, dy = burroCy - cy;
+          const dist = Math.hypot(dx, dy) || 1;
+          const ux = dx / dist, uy = dy / dist;
+          transformed = ptsOriginal.map(p => {
+            const px = p[0] - cx, py = p[1] - cy;
+            const proj = px * ux + py * uy;
+            const perp_x = px - proj * ux, perp_y = py - proj * uy;
+            const newProj = proj * (scaleBase * 1.30) + dist * 0.25;
+            const newPerpX = perp_x * (scaleBase * 0.769);
+            const newPerpY = perp_y * (scaleBase * 0.769);
+            return [cx + newProj * ux + newPerpX, cy + newProj * uy + newPerpY];
+          });
+        }
         const smoothed = chaikinSmooth(transformed, 2);
         const sArea = polyArea(smoothed);
-        const k = Math.sqrt(targetAreaVaca / (sArea || 1));
+        const k = Math.sqrt(areaObjetivo / (sArea || 1));
         const scx = smoothed.reduce((s, p) => s + p[0], 0) / smoothed.length;
         const scy = smoothed.reduce((s, p) => s + p[1], 0) / smoothed.length;
         expandedPts = smoothed.map(p => [scx + (p[0] - scx) * k, scy + (p[1] - scy) * k]);
@@ -707,27 +717,42 @@
   // ---- Modelos Históricos Documentados ----
   function buildCorabastosModel() {
     corabastosGroup.clear();
-    return; // sin volumenes inventados: las bodegas de Corabastos son edificios reales del conjunto de datos
-    const wallMat = new THREE.MeshStandardMaterial({ color: 0xc9c1b0, roughness: 0.85, metalness: 0.05 }); // concreto (antes azul gris, se veia de plastico)
-    const edgeMat = new THREE.LineBasicMaterial({ color: 0x1e293b, transparent: true, opacity: 0.4 });
-    const bodegas = [
-      { x: 260, z: 45, w: 28, h: 4.5, d: 14 },
-      { x: 260, z: 65, w: 28, h: 4.5, d: 14 },
-      { x: 295, z: 45, w: 24, h: 4.5, d: 14 },
-      { x: 295, z: 65, w: 24, h: 4.5, d: 14 },
-      { x: 275, z: 88, w: 38, h: 5.0, d: 16 }
+    // Perímetro esquemático del predio de Corabastos (aprox. 420.000 m²),
+    // centrado en la localización usada por la línea histórica (114, 117).
+    // Se dibuja como una huella gris, no como volúmenes inventados.
+    const pts = [
+      { x: 62, z: 84 }, { x: 158, z: 84 }, { x: 174, z: 106 },
+      { x: 164, z: 145 }, { x: 78, z: 151 }, { x: 53, z: 124 }
     ];
-    bodegas.forEach(b => {
-      const bGeo = new THREE.BoxGeometry(b.w, b.h, b.d);
-      const mesh = new THREE.Mesh(bGeo, wallMat);
-      mesh.position.set(b.x, b.h / 2 + 0.05, b.z);
-      mesh.castShadow = true;
-      mesh.receiveShadow = true;
-      const eGeo = new THREE.EdgesGeometry(bGeo);
-      const eMesh = new THREE.LineSegments(eGeo, edgeMat);
-      mesh.add(eMesh);
-      corabastosGroup.add(mesh);
-    });
+    const flatPos = [];
+    pts.forEach(p => flatPos.push(p.x, 0.052, p.z));
+    const lineGeo = new THREE.BufferGeometry();
+    lineGeo.setAttribute('position', new THREE.Float32BufferAttribute(flatPos, 3));
+    const lineMat = new THREE.LineBasicMaterial({ color: 0x8f969d, transparent: true, opacity: 0.95, depthWrite: false });
+    const outline = new THREE.LineLoop(lineGeo, lineMat);
+    outline.renderOrder = 42;
+    corabastosGroup.add(outline);
+
+    const shapePts = pts.map(p => new THREE.Vector2(p.x, -p.z));
+    const fill = new THREE.Mesh(
+      new THREE.ShapeGeometry(new THREE.Shape(shapePts)),
+      new THREE.MeshBasicMaterial({ color: 0x9aa1a8, transparent: true, opacity: 0.16, side: THREE.DoubleSide, depthWrite: false })
+    );
+    fill.rotation.x = -Math.PI / 2;
+    fill.position.y = 0.048;
+    fill.renderOrder = 41;
+    corabastosGroup.add(fill);
+
+    const labelCanvas = document.createElement('canvas');
+    labelCanvas.width = 640; labelCanvas.height = 96;
+    const ctx = labelCanvas.getContext('2d');
+    ctx.fillStyle = 'rgba(20,24,28,.84)'; ctx.fillRect(4, 4, 632, 88);
+    ctx.strokeStyle = '#aeb5bc'; ctx.lineWidth = 3; ctx.strokeRect(4, 4, 632, 88);
+    ctx.fillStyle = '#eef1f3'; ctx.font = '700 34px IBM Plex Sans, Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('CORABASTOS · 1972', 320, 48);
+    const label = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(labelCanvas), transparent: true, depthTest: false }));
+    label.position.set(114, 5.5, 117); label.scale.set(38, 5.7, 1); label.renderOrder = 45;
+    corabastosGroup.add(label);
   }
 
   function buildRoads1972() {
@@ -1028,6 +1053,9 @@
 
     cowsGroup.visible = true;
     historicalWetlandsGroup.visible = true;
+    // Mirlas en vuelo: llegan desde el oriente, descansan cerca de los humedales
+    // y vuelven a salir por el occidente durante la evolución histórica.
+    if (birdsGroup) birdsGroup.visible = year < 2024;
     histTreesGroup.visible = year <= 1956; // mas arboles solo en 1950 y 1956
     userPlantedGroup.visible = true;
     customPolysGroup.visible = true;
@@ -1085,7 +1113,7 @@
     } else if (year === 1972) {
       setEraNota(NOTA_EDIFICIOS(25, true));
       if (badge) badge.textContent = "1972 · Corabastos";
-      if (desc) desc.textContent = "1972 \u00b7 Inauguraci\u00f3n de Corabastos y acceso por la Av. de las Am\u00e9ricas. El Burro mide unas 80 ha: todav\u00eda no se ha reducido del todo (interpolaci\u00f3n entre las 171 ha de los a\u00f1os 50 y las 27,14 ha de 1985).";
+      if (desc) desc.textContent = "1972 \u00b7 Corabastos ocupa el predio central y el Humedal La Vaca conserva sus dos sectores, incluido el ámbito que llega hasta la central. El Burro mide unas 80 ha: todavía no se ha reducido del todo.";
       cowsGroup.visible = true;
       historicalWetlandsGroup.visible = true;
       aeropuertoTechoGroup.visible = false;
@@ -1098,9 +1126,9 @@
 
       if (animateCam) {
         transitionCameraTo(
-          new THREE.Vector3(135.0, 710.0, 690.0),
-          new THREE.Vector3(240.0, -30.0, 35.0),
-          1.80,
+          new THREE.Vector3(94.0, 690.0, 760.0),
+          new THREE.Vector3(114.0, -18.0, 117.0),
+          1.95,
           2200
         );
       }
@@ -2029,7 +2057,7 @@
     "Urapán, Fresno": { key: "urapan", color: 0x7fb59f, weight: 0.52, base: 220 },
   };
   const BIRD_VISION = 14, BIRD_ARRIVE = 1.4, BIRD_WIND = 1.5, BIRD_MAX_SPEED = 4.2;
-  const BIRD_REST_SPEED = 1.0, BIRD_NOISE_DB = 60, BIRD_K_REP = 4.2, BIRD_COUNT = 50;
+  const BIRD_REST_SPEED = 1.0, BIRD_NOISE_DB = 60, BIRD_K_REP = 4.2, BIRD_COUNT = 72;
   const REFUGE_X = 3600, REFUGE_Y = 1000, REFUGE_R = 220; // esquina noroeste real del area de Kennedy
   let birds = [], birdTreesGrid = null, birdOn = false, birdsGroup = null;
   let noiseEdgesRaw = null; // se reusan los mismos datos reales de ruido ya cargados
@@ -2185,7 +2213,7 @@
       const origen = i < refugeCount ? "refugio" : (i % 2 ? "humedal" : "oriente");
       const b = makeBirdAgent(origen);
       const sprite = new THREE.Sprite(spriteMat.clone());
-      sprite.scale.set(9, 9, 1); // mas grande que en modulo-10-corte (3.2): aqui se ve TODA la ciudad, no un sector acercado, y con el sprite chico no se alcanzaban a ver las mirlas
+      sprite.scale.set(10, 10, 1); // mas grande que en modulo-10-corte (3.2): aqui se ve TODA la ciudad, no un sector acercado, y con el sprite chico no se alcanzaban a ver las mirlas
       sprite.renderOrder = 999;
       birdsGroup.add(sprite);
       b.sprite = sprite;
