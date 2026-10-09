@@ -2310,7 +2310,7 @@ window.onerror = function(msg, url, line, col, error) {
           if (pts.length < 3) return;
 
           const hMeters = b.height || b.h || 12.0;
-          const h = Math.max(0.9, hMeters * SCALE);
+          const h = Math.max(0.9, hMeters * SCALE * 1.12);
           const sPts = pts.map(p => toScene(p[0], p[1]));
 
           const bldgCol = (i % 7 === 0) ? colRoofHighlight : ((i % 2 === 0) ? colBldgPrimary : colBldgSecondary);
@@ -2328,7 +2328,7 @@ window.onerror = function(msg, url, line, col, error) {
               const isRoof = (s === steps);
               const c = isRoof ? bldgCol : bldgCol.clone().multiplyScalar(0.7 + (s / steps) * 0.3);
               pColor.push(c.r, c.g, c.b);
-              pSize.push(isRoof ? 1.5 : 1.15);
+              pSize.push(isRoof ? 2.0 : 1.7);
               pPhase.push(i * 0.08 + s * 0.3);
               pCat.push(3.0);
             }
@@ -2344,8 +2344,23 @@ window.onerror = function(msg, url, line, col, error) {
             pTarget.push(cx, h, cz);
             pSwarm.push(swRoof.x, swRoof.y, swRoof.z);
             pColor.push(bldgCol.r * 1.1, bldgCol.g * 1.1, bldgCol.b * 1.1);
-            pSize.push(1.6);
+            pSize.push(2.15);
             pPhase.push(i * 0.05);
+            pCat.push(3.0);
+          }
+          // Relleno interior muy ligero: un punto a media altura cada 4 edificios.
+          // Mejora la lectura volumétrica sin densificar toda la zona construida.
+          if (sPts.length >= 3 && i % 4 === 0) {
+            let mx = 0, mz = 0;
+            sPts.forEach(p => { mx += p.x; mz += p.z; });
+            mx /= sPts.length;
+            mz /= sPts.length;
+            const swMid = randomSwarmCluster(currentParticleIndex++);
+            pTarget.push(mx, h * 0.52, mz);
+            pSwarm.push(swMid.x, swMid.y, swMid.z);
+            pColor.push(bldgCol.r * 0.92, bldgCol.g * 0.92, bldgCol.b * 0.92);
+            pSize.push(1.85);
+            pPhase.push(i * 0.07 + 0.5);
             pCat.push(3.0);
           }
         });
