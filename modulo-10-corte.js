@@ -7802,41 +7802,8 @@ function updateTagCoords() {
 tags.forEach((t, i) => {
     if(!t.style.left) t.style.left = "240px";
     if(!t.style.top) t.style.top = "50%";
-    
-    const panel = document.createElement("div");
-    panel.style.position = "absolute";
-    panel.style.left = "-60px";
-    panel.style.top = "0px";
-    panel.style.background = "#fff";
-    panel.style.border = "1px solid #000";
-    panel.style.padding = "2px";
-    panel.style.display = "grid";
-    panel.style.gridTemplateColumns = "1fr 1fr 1fr";
-    panel.style.gap = "2px";
-    panel.style.pointerEvents = "auto";
-    panel.style.zIndex = "9999";
-    
     t.style.pointerEvents = "auto";
     
-    const btnUp = document.createElement("button"); btnUp.textContent = "↑";
-    const btnDown = document.createElement("button"); btnDown.textContent = "↓";
-    const btnLeft = document.createElement("button"); btnLeft.textContent = "←";
-    const btnRight = document.createElement("button"); btnRight.textContent = "→";
-    
-    btnUp.onclick = (e) => { e.stopPropagation(); let top = parseFloat(t.style.top) || 50; t.style.top = (top - 1) + "%"; updateTagCoords(); };
-    btnDown.onclick = (e) => { e.stopPropagation(); let top = parseFloat(t.style.top) || 50; t.style.top = (top + 1) + "%"; updateTagCoords(); };
-    btnLeft.onclick = (e) => { e.stopPropagation(); let left = parseFloat(t.style.left) || 240; t.style.left = (left - 5) + "px"; updateTagCoords(); };
-    btnRight.onclick = (e) => { e.stopPropagation(); let left = parseFloat(t.style.left) || 240; t.style.left = (left + 5) + "px"; updateTagCoords(); };
-    
-    panel.appendChild(document.createElement("div"));
-    panel.appendChild(btnUp);
-    panel.appendChild(document.createElement("div"));
-    panel.appendChild(btnLeft);
-    panel.appendChild(document.createElement("div"));
-    panel.appendChild(btnRight);
-    panel.appendChild(document.createElement("div"));
-    panel.appendChild(btnDown);
-    panel.appendChild(document.createElement("div"));
-    
-    t.appendChild(panel);
+    // Panel de flechas de edicion (arriba/lados/abajo) retirado: las 4 capas
+    // tecnologicas quedan sin flechas, como las anteriores. No se toca nada mas.
 });
