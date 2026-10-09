@@ -51,6 +51,8 @@
   sceneRoot.add(cowsGroup);
   const histTreesGroup = new THREE.Group();
   sceneRoot.add(histTreesGroup);
+  const avesGroup = new THREE.Group();
+  sceneRoot.add(avesGroup);
 
   const historicalWetlandsGroup = new THREE.Group();
   sceneRoot.add(historicalWetlandsGroup);
@@ -437,6 +439,70 @@
     histTreesGroup.add(inst);
   }
 
+  // Aves del humedal: patos, tinguas y garzas chicas que se mueven dentro del agua (cerca de un tercio del tamano de una vaca).
+  // Con los anos quedan menos, pero nunca desaparecen: en la actualidad todavia queda al menos una de cada una en cada humedal.
+  const AVE_FRACTION = { 1950: 1, 1956: 1, 1972: 0.6, 1988: 0.3, 1995: 0.18, 2024: 0.07 };
+  const AVE_BASE = { Burro: { pato: 30, tingua: 18, garza: 8 }, Vaca: { pato: 30, tingua: 16, garza: 8 }, Techo: { pato: 20, tingua: 12, garza: 6 } };
+  // Con un tercio del tamano de una vaca (1 a 3 px en pantalla) no se distinguian; AVE_ESCALA las deja cerca de la mitad de una vaca.
+  const AVE_ESCALA = 1.7;
+  const AVE_TIPOS = {
+    pato: { img: "pato.png", ancho: 1.2, alto: 0.9, vel: 1.5, margen: 2.2, giro: 0.8, pausa: 0.05, orilla: false },
+    tingua: { img: "tingua.png", ancho: 0.75, alto: 0.9, vel: 0.9, margen: 1.2, giro: 0.6, pausa: 0.25, orilla: true },
+    garza: { img: "garza.png", ancho: 0.55, alto: 1.4, vel: 0.35, margen: 1.2, giro: 0.3, pausa: 0.5, orilla: true }
+  };
+  const aveInstances = [], aveTex = {};
+  let tAveAnt = null;
+  function texAve(nombre) { return aveTex[nombre] || (aveTex[nombre] = new THREE.TextureLoader().load("./assets/" + nombre)); }
+  function contornosModernos(waterBodies) {
+    return (waterBodies || []).filter(w => /Burro|Vaca|Techo/.test(w.nombre || "")).map(w => ({ nombre: w.nombre, pts: w.pts.map(p => toScene(p[0], p[1])) }));
+  }
+  function colocarAves(outlines, year) {
+    avesGroup.clear(); aveInstances.length = 0;
+    const f = AVE_FRACTION[year >= 2024 ? 2024 : year];
+    if (!f || !outlines.length) return;
+    const rnd = mulberry32(9100 + year);
+    outlines.forEach(o => {
+      const key = o.nombre.includes("Burro") ? "Burro" : (o.nombre.includes("Vaca") ? "Vaca" : "Techo"), base = AVE_BASE[key], pts = o.pts;
+      let x0 = 1e9, z0 = 1e9, x1 = -1e9, z1 = -1e9;
+      pts.forEach(p => { x0 = Math.min(x0, p.x); z0 = Math.min(z0, p.z); x1 = Math.max(x1, p.x); z1 = Math.max(z1, p.z); });
+      Object.keys(base).forEach(tipo => {
+        const T = AVE_TIPOS[tipo], n = Math.max(1, Math.round(base[tipo] * f));
+        for (let i = 0; i < n; i++) {
+          let mejor = null;
+          for (let k = 0; k < (T.orilla ? 60 : 40); k++) {
+            const x = x0 + rnd() * (x1 - x0), z = z0 + rnd() * (z1 - z0);
+            if (!pointInPoly(x, z, pts)) continue;
+            const d = distToPoly(x, z, pts);
+            if (d < T.margen) continue;
+            if (!T.orilla) { mejor = { x, z }; break; }               // los patos nadan en cualquier parte del agua
+            if (!mejor || d < mejor.d) mejor = { x, z, d };            // las tinguas y las garzas prefieren la orilla
+          }
+          if (!mejor) continue;
+          const mat = new THREE.MeshBasicMaterial({ map: texAve(T.img), transparent: true, alphaTest: 0.3, side: THREE.DoubleSide, depthWrite: false });
+          const mesh = new THREE.Mesh(new THREE.PlaneGeometry(T.ancho * AVE_ESCALA, T.alto * AVE_ESCALA), mat);
+          mesh.position.set(mejor.x, T.alto * AVE_ESCALA * 0.5, mejor.z); mesh.rotation.x = -Math.PI / 4.2; mesh.renderOrder = 31;
+          avesGroup.add(mesh);
+          aveInstances.push({ mesh, tipo, pts, th: rnd() * Math.PI * 2, vel: T.vel * (0.7 + rnd() * 0.6), margen: T.margen, giro: T.giro, pPausa: T.pausa, pausa: 0, flip: 1 });
+        }
+      });
+    });
+  }
+  function moverAves(dt) {
+    if (!aveInstances.length) return;
+    const der = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0); // derecha de la pantalla, en el mundo
+    for (let i = 0; i < aveInstances.length; i++) {
+      const b = aveInstances[i];
+      if (b.pausa > 0) { b.pausa -= dt; continue; }
+      b.th += (Math.random() - 0.5) * b.giro * dt * 4;
+      const dx = Math.cos(b.th) * b.vel * dt, dz = Math.sin(b.th) * b.vel * dt, nx = b.mesh.position.x + dx, nz = b.mesh.position.z + dz;
+      if (pointInPoly(nx, nz, b.pts) && distToPoly(nx, nz, b.pts) >= b.margen) { b.mesh.position.x = nx; b.mesh.position.z = nz; }
+      else b.th += Math.PI * (0.6 + Math.random() * 0.8); // al llegar a la orilla da la vuelta
+      if (Math.random() < b.pPausa * dt) b.pausa = 1 + Math.random() * 3;
+      const s = (dx * der.x + dz * der.z) >= 0 ? 1 : -1;
+      if (s !== b.flip) { b.flip = s; b.mesh.scale.x = s; }
+    }
+  }
+
   // 2. Construcción de humedales históricos con el área solicitada según la época
   function buildHistoricalWetlands(waterBodies, year = 1950) {
     if (!waterBodies || !waterBodies.length) return;
@@ -635,6 +701,7 @@
     }
     colocarVacas(wetlandOutlines, year);
     colocarArbolesHistoricos(wetlandOutlines, year);
+    colocarAves(wetlandOutlines, year);
     aplicarCrecimiento(); // edificios y vias segun las reglas de la epoca y el agua de la epoca
   }
   // ---- Modelos Históricos Documentados ----
@@ -665,6 +732,7 @@
 
   function buildRoads1972() {
     roads1972Group.clear();
+    return; // se quitaron las dos avenidas trazadas a mano (formaban una Y que no corresponde a ninguna via real)
     const viaTex = new THREE.TextureLoader().load("./assets/textura_via.jpg");
     viaTex.wrapS = THREE.RepeatWrapping; viaTex.wrapT = THREE.RepeatWrapping;
     const avenues = [
@@ -1082,6 +1150,7 @@
       }
     } else if (year >= 2024) {
       aplicarCrecimiento(); setEraNota("");
+      colocarAves(contornosModernos(rawWaterData), 2024); // en la actualidad quedan pocas aves, en los humedales que sobreviven
       if (badge) badge.textContent = "Actualidad (2024)";
       if (desc) desc.textContent = "Actualidad · Modelo axonométrico arquitectónico urbano completo de Kennedy con el Humedal El Burro protegido de 18,8 ha.";
       
@@ -1476,6 +1545,12 @@
   }
   function setEraNota(t) { const el = document.getElementById("eraNota"); if (el) el.textContent = t || ""; }
   const NOTA_EDIFICIOS = (pct, soloUnPiso) => "Edificios reales de Kennedy mostrados de a poco (" + pct + " % de " + (soloUnPiso ? "los de un piso" : "todos") + "), ordenados por cercan\u00eda al antiguo aeropuerto de Techo. " + (soloUnPiso ? "Solo de un piso: los edificios en altura aparecen en los a\u00f1os 90. " : "Ya aparecen los edificios en altura y las avenidas principales. ") + "No hay edificios sobre el humedal. Los datos no traen el a\u00f1o de construcci\u00f3n: es una aproximaci\u00f3n.";
+  // para que el panel de epocas ponga sus iconos sobre el territorio
+  window.__proyectarAPantalla = (x, y, z) => { const v = new THREE.Vector3(x, y, z).project(camera); return [(v.x + 1) / 2 * window.innerWidth, (1 - v.y) / 2 * window.innerHeight, v.z]; };
+  // Techo: centro de la pista trazada. El Burro: centro del poligono de los datos. Corabastos: coordenadas de Wikipedia (4,6302; -74,1588)
+  // proyectadas con El Burro como ancla (120, 131) y llevadas al centro de las 33 construcciones grandes (1.200 m2 o mas) que hay a menos de 450 m
+  // (114, 117). Es aproximado: unos 200 m de margen.
+  window.__lugaresMapa = () => ({ techo: nucleoCrecimiento(), burro: { x: 210, z: -11 }, corabastos: { x: 114, z: 117 } });
   window.__estadoHistorico = () => ({
     anio: currentHistoricalYear,
     edificiosVisibles: currentBuildingMesh ? Math.floor(buildingGrowthVert.length * (currentBuildingMesh.visible ? 1 : 0)) : 0,
@@ -1489,6 +1564,8 @@
     viasVisibles: modernRoadMesh ? modernRoadMesh.visible : null, rangoVias: modernRoadLines ? modernRoadLines.geometry.drawRange.count : null, avCaliVisible: avCaliGroup.visible,
     notaEdificios: (document.getElementById("eraNota") || {}).textContent || "",
     crecimiento: estadoCrecimiento,
+    viasTrazadasAMano: roads1972Group.children.length,
+    aves: (() => { const c = { pato: 0, tingua: 0, garza: 0, fuera: 0 }; aveInstances.forEach(b => { c[b.tipo]++; if (!pointInPoly(b.mesh.position.x, b.mesh.position.z, b.pts)) c.fuera++; }); return c; })(),
     aeropuertoEnPantalla: (() => { const a = nucleoCrecimiento(), v = new THREE.Vector3(a.x, 0, a.z).project(camera); return [Math.round((v.x + 1) / 2 * window.innerWidth), Math.round((1 - v.y) / 2 * window.innerHeight)]; })(),
     volumenesInventados: corabastosGroup.children.length + protechoGroup.children.length
   });
@@ -2999,6 +3076,8 @@
         c.mesh.position.z = c.baseZ + Math.cos(t * 0.15 * c.speed + c.phase) * c.wanderR;
       }
     }
+    // aves del humedal: nadan y caminan dentro del agua
+    { const dtAve = tAveAnt == null ? 0 : Math.min(0.1, (now - tAveAnt) / 1000); tAveAnt = now; moverAves(dtAve); }
     if (playing && timesteps.length && slider) {
       if (lastFrameAt == null) lastFrameAt = now;
       const dt = (now - lastFrameAt) / 1000;

@@ -207,6 +207,43 @@
     const et0 = etapaActiva(), primero = visibles().find(x => x.etapa === et0);
     sel = primero ? primero.id : ordenados[0].id;
     pintarEra(); pintarGrilla(); pintarDetalle();
+
+    // ---- iconos sobre el territorio: aparecen a medida que pasan las epocas, en el lugar donde ocurre cada hito ----
+    const ORDEN_ERA = [1950, 1956, 1972, 1988, 1995, 2024];
+    const LUGAR = {
+      "techo-1930": ["techo", 0], "panamericana-1948": ["techo", 1], "dorado-1959": ["techo", 2], "piedra-1961": ["techo", 3],
+      "nombre-1963": ["techo", 4], "concejo-1967": ["techo", 5], "buses-1969": ["techo", 6], "cabildo-1993": ["techo", 7],
+      "corabastos-1972": ["corabastos", 0], "paro-1995": ["corabastos", 1],
+      "burro-1985": ["burro", 0], "cali-1990s": ["burro", 1], "decreto-2004": ["burro", 2], "estudio-2019": ["burro", 3], "tinguas-2021": ["burro", 4]
+    };
+    const RADIO = { techo: 30, burro: 22, corabastos: 14 }, NGRUPO = { techo: 8, burro: 5, corabastos: 2 };
+    const capa = h("div", { id: "marcadoresMapa" });
+    (document.querySelector(".main") || document.body).appendChild(capa);
+    const marcadores = {};
+    EVENTOS.forEach(e => {
+      const L = LUGAR[e.id];
+      const b = h("button", { type: "button", class: "mapa-ev", "data-id": e.id, style: "--c:" + TEMAS[e.tema].color + "; display:none", title: e.anio + ": " + e.titulo, "aria-label": "En el mapa: " + e.anio + ", " + e.titulo },
+        h("span", { class: "ic" }, ic(e.icono)), h("span", { class: "an", text: String(e.rotulo || e.anio) }));
+      b.addEventListener("click", () => seleccionar(e.id, false));
+      capa.appendChild(b); marcadores[e.id] = { el: b, lug: L[0], k: L[1], e };
+    });
+    function actualizarMarcadores() {
+      requestAnimationFrame(actualizarMarcadores);
+      if (!window.__proyectarAPantalla || !window.__lugaresMapa) return;
+      const et = etapaActiva(), iEra = ORDEN_ERA.indexOf(et), W = window.innerWidth, H = window.innerHeight, lugares = window.__lugaresMapa();
+      Object.keys(marcadores).forEach(id => {
+        const m = marcadores[id];
+        if (ORDEN_ERA.indexOf(m.e.etapa) > iEra) { if (m.el.style.display !== "none") m.el.style.display = "none"; return; }
+        const c = lugares[m.lug], a = -Math.PI / 2 + (2 * Math.PI * m.k) / NGRUPO[m.lug];
+        const q = window.__proyectarAPantalla(c.x + RADIO[m.lug] * Math.cos(a), 3, c.z + RADIO[m.lug] * Math.sin(a));
+        const fuera = q[0] < 335 || q[0] > W - 14 || q[1] < 40 || q[1] > H - 90; // oculto si queda bajo el panel o fuera de la pantalla
+        m.el.style.display = fuera ? "none" : "";
+        if (!fuera) m.el.style.transform = "translate(" + Math.round(q[0]) + "px," + Math.round(q[1]) + "px) translate(-50%,-50%)";
+        m.el.classList.toggle("nuevo", m.e.etapa === et);
+        m.el.classList.toggle("sel", id === sel);
+      });
+    }
+    requestAnimationFrame(actualizarMarcadores);
   }
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", iniciar); else iniciar();
 })();

@@ -204,6 +204,17 @@
   .ep-pie i{ margin-top:2px; color:var(--accent); flex:none; }
   .ep button:focus-visible, .ep a:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
   #eraDesc, #eraNota{ display:none; } /* los textos largos de epoca se reemplazaron por los iconos del panel */
+  /* Iconos de la historia sobre el territorio */
+  #marcadoresMapa{ position:absolute; inset:0; z-index:7; pointer-events:none; overflow:hidden; }
+  .mapa-ev{ position:absolute; left:0; top:0; display:flex; flex-direction:column; align-items:center; gap:2px; pointer-events:auto; background:none; border:0; padding:0; cursor:pointer; will-change:transform; }
+  .mapa-ev .ic{ width:28px; height:28px; border-radius:50%; display:grid; place-items:center; background:rgba(17,20,24,.92); border:2px solid var(--c); color:var(--c); font-size:12px; box-shadow:0 2px 8px rgba(0,0,0,.45); }
+  .mapa-ev .an{ font:700 9.5px 'IBM Plex Mono',monospace; color:#e8ecf1; background:rgba(17,20,24,.85); padding:1px 5px; border-radius:6px; }
+  .mapa-ev:hover .ic{ transform:scale(1.12); }
+  .mapa-ev.sel .ic{ background:var(--c); color:#14181c; }
+  .mapa-ev.nuevo .ic{ animation:ev-pulso 1.6s ease-out 3; }
+  @keyframes ev-pulso{ 0%{ box-shadow:0 0 0 0 var(--c); } 100%{ box-shadow:0 0 0 16px transparent; } }
+  @media (prefers-reduced-motion: reduce){ .mapa-ev.nuevo .ic{ animation:none; } }
+  .mapa-ev:focus-visible{ outline:2px solid var(--accent); outline-offset:3px; border-radius:50%; }
 </style>
 </head>
 <body>
@@ -260,7 +271,7 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
-<script src="modulo-08-3d.js?v=274"></script>
-<script src="panel-epocas.js?v=3"></script>
+<script src="modulo-08-3d.js?v=277"></script>
+<script src="panel-epocas.js?v=4"></script>
 </body>
 </html>
