@@ -65,6 +65,13 @@
 
   const corabastosGroup = new THREE.Group();
   sceneRoot.add(corabastosGroup);
+  // Perimetro real del predio de Corabastos (muro del predio "Abastos" en
+  // OpenStreetMap, way 123049049, ~41 ha), pasado a UTM 18N y llevado a las
+  // coordenadas del modelo con el desplazamiento que mejor calza los humedales
+  // El Burro, Techo y La Vaca Sur de los datos con los de OSM (error ~5 m).
+  // Ya en coordenadas de escena (x, z).
+  const CORABASTOS_PTS = [{ x: 140.22, z: 75.17 }, { x: 125.88, z: 72.45 }, { x: 124.53, z: 72.89 }, { x: 123.88, z: 71.31 }, { x: 123.59, z: 71.2 }, { x: 110.11, z: 68.32 }, { x: 109.53, z: 69.31 }, { x: 108.25, z: 69.21 }, { x: 108.06, z: 68.23 }, { x: 107.78, z: 67.92 }, { x: 89.82, z: 63.66 }, { x: 56.52, z: 92.05 }, { x: 69.33, z: 107.39 }, { x: 71.61, z: 109.25 }, { x: 73.8, z: 109.72 }, { x: 85.28, z: 129.33 }, { x: 87.02, z: 129.41 }, { x: 89.13, z: 131.17 }, { x: 115.84, z: 133.2 }, { x: 117.67, z: 131.49 }, { x: 118.7, z: 131.28 }, { x: 138.77, z: 109.58 }, { x: 139.66, z: 107.83 }, { x: 146.62, z: 99.78 }, { x: 145.55, z: 99.2 }, { x: 144.62, z: 98.99 }, { x: 145.35, z: 90.45 }, { x: 142.56, z: 90.2 }, { x: 142.67, z: 88.32 }, { x: 139.57, z: 88.07 }];
+  const CORABASTOS_ANIOS = { 1972: true, 1988: true, 1995: true }; // anos en que se dibuja el predio
 
   const roads1972Group = new THREE.Group();
   sceneRoot.add(roads1972Group);
@@ -642,13 +649,29 @@
         expandedPts = smoothed.map(p => [scx + (p[0] - scx) * k, scy + (p[1] - scy) * k]);
       }
 
-      const scenePts = expandedPts.map(p => toScene(p[0], p[1]));
+      const scenePtsFull = expandedPts.map(p => toScene(p[0], p[1]));
+      if (scenePtsFull.length < 3) return;
+      // En los anos en que esta Corabastos, el agua que cae dentro de su
+      // perimetro se quita: el humedal queda cortado por el muro del predio.
+      let piezas = [{ outer: scenePtsFull, holes: [] }];
+      if (CORABASTOS_ANIOS[year] && window.polygonClipping) {
+        try {
+          const anillo = pts => { const r = pts.map(p => [p.x, p.z]); r.push(r[0].slice()); return r; };
+          const sinCierre = r => r.slice(0, -1).map(q => ({ x: q[0], z: q[1] }));
+          const res = window.polygonClipping.difference([anillo(scenePtsFull)], [anillo(CORABASTOS_PTS)]);
+          piezas = res.filter(poly => poly[0].length >= 4)
+            .map(poly => ({ outer: sinCierre(poly[0]), holes: poly.slice(1).map(sinCierre) }));
+        } catch (e) { console.warn("Recorte de Corabastos fallido", e); }
+      }
+      piezas.forEach(({ outer: scenePts, holes }) => {
       if (scenePts.length < 3) return;
       wetlandOutlines.push({ nombre: name, pts: scenePts });
 
       const pts2d = scenePts.map(p => new THREE.Vector2(p.x, p.z));
+      const holes2d = holes.map(h => h.map(p => new THREE.Vector2(p.x, p.z)));
+      const allPts = scenePts.concat(...holes);
       let tris = [];
-      try { tris = THREE.ShapeUtils.triangulateShape(pts2d, []); } catch (e) {}
+      try { tris = THREE.ShapeUtils.triangulateShape(pts2d, holes2d); } catch (e) {}
 
       const nPts = scenePts.length;
       const polyCentroidX = scenePts.reduce((s, p) => s + p.x, 0) / nPts;
@@ -666,20 +689,23 @@
       }
 
       // Línea de orilla oscura verdosa
-      for (let i = 0; i < nPts; i++) {
-        const p1 = scenePts[i];
-        const p2 = scenePts[(i + 1) % nPts];
-        linePositions.push(p1.x, yLayer + 0.004, p1.z, p2.x, yLayer + 0.004, p2.z);
-      }
+      [scenePts, ...holes].forEach(ring => {
+        for (let i = 0; i < ring.length; i++) {
+          const p1 = ring[i];
+          const p2 = ring[(i + 1) % ring.length];
+          linePositions.push(p1.x, yLayer + 0.004, p1.z, p2.x, yLayer + 0.004, p2.z);
+        }
+      });
 
       tris.forEach(([a, b, c]) => {
         [a, b, c].forEach(idx => {
-          const pt = scenePts[idx];
+          const pt = allPts[idx];
           positions.push(pt.x, yLayer, pt.z);
           uvs.push(pt.x * UV_SCALE, pt.z * UV_SCALE);
           const [cr, cg, cb] = getWetlandGradientColor(pt.x, pt.z);
           colors.push(cr, cg, cb);
         });
+      });
       });
     });
 
@@ -717,13 +743,9 @@
   // ---- Modelos Históricos Documentados ----
   function buildCorabastosModel() {
     corabastosGroup.clear();
-    // Perímetro esquemático del predio de Corabastos (aprox. 420.000 m²),
-    // centrado en la localización usada por la línea histórica (114, 117).
-    // Se dibuja como una huella gris, no como volúmenes inventados.
-    const pts = [
-      { x: 62, z: 84 }, { x: 158, z: 84 }, { x: 174, z: 106 },
-      { x: 164, z: 145 }, { x: 78, z: 151 }, { x: 53, z: 124 }
-    ];
+    // Perimetro real del predio (ver CORABASTOS_PTS). Se dibuja como una huella
+    // gris, no como volumenes inventados.
+    const pts = CORABASTOS_PTS;
     const flatPos = [];
     pts.forEach(p => flatPos.push(p.x, 0.052, p.z));
     const lineGeo = new THREE.BufferGeometry();
@@ -751,7 +773,7 @@
     ctx.fillStyle = '#eef1f3'; ctx.font = '700 34px IBM Plex Sans, Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText('CORABASTOS · 1972', 320, 48);
     const label = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(labelCanvas), transparent: true, depthTest: false }));
-    label.position.set(114, 5.5, 117); label.scale.set(38, 5.7, 1); label.renderOrder = 45;
+    label.position.set(104, 5.5, 98); label.scale.set(38, 5.7, 1); label.renderOrder = 45;
     corabastosGroup.add(label);
   }
 
@@ -1575,10 +1597,9 @@
   const NOTA_EDIFICIOS = (pct, soloUnPiso) => "Edificios reales de Kennedy mostrados de a poco (" + pct + " % de " + (soloUnPiso ? "los de un piso" : "todos") + "), ordenados por cercan\u00eda al antiguo aeropuerto de Techo. " + (soloUnPiso ? "Solo de un piso: los edificios en altura aparecen en los a\u00f1os 90. " : "Ya aparecen los edificios en altura y las avenidas principales. ") + "No hay edificios sobre el humedal. Los datos no traen el a\u00f1o de construcci\u00f3n: es una aproximaci\u00f3n.";
   // para que el panel de epocas ponga sus iconos sobre el territorio
   window.__proyectarAPantalla = (x, y, z) => { const v = new THREE.Vector3(x, y, z).project(camera); return [(v.x + 1) / 2 * window.innerWidth, (1 - v.y) / 2 * window.innerHeight, v.z]; };
-  // Techo: centro de la pista trazada. El Burro: centro del poligono de los datos. Corabastos: coordenadas de Wikipedia (4,6302; -74,1588)
-  // proyectadas con El Burro como ancla (120, 131) y llevadas al centro de las 33 construcciones grandes (1.200 m2 o mas) que hay a menos de 450 m
-  // (114, 117). Es aproximado: unos 200 m de margen.
-  window.__lugaresMapa = () => ({ techo: nucleoCrecimiento(), burro: { x: 210, z: -11 }, corabastos: { x: 114, z: 117 } });
+  // Techo: centro de la pista trazada. El Burro: centro del poligono de los datos. Corabastos: centroide del perimetro real del predio
+  // (CORABASTOS_PTS, desde OpenStreetMap), en (104, 98).
+  window.__lugaresMapa = () => ({ techo: nucleoCrecimiento(), burro: { x: 210, z: -11 }, corabastos: { x: 104, z: 98 } });
   window.__estadoHistorico = () => ({
     anio: currentHistoricalYear,
     edificiosVisibles: currentBuildingMesh ? Math.floor(buildingGrowthVert.length * (currentBuildingMesh.visible ? 1 : 0)) : 0,
