@@ -3087,6 +3087,8 @@ window.onerror = function(msg, url, line, col, error) {{
 
     if (territoryBeaconsGroup) territoryBeaconsGroup.visible = showTerritory;
 
+    // La red completa se apaga en Territorio para evitar burbujas residuales.
+    networkGroup.visible = !showTerritory;
     networkGroup.children.forEach(c => {{
       if (c.isSprite) c.visible = !showTerritory && rawNodes[c.userData.id]?.active;
     }});
