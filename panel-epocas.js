@@ -89,7 +89,7 @@
     1950: { nombre: "Sabana rural", icono: "fa-wheat-awn", chips: [
       { i: "fa-plane", t: "El aeropuerto de Techo funciona de 1930 a 1959" },
       { i: "fa-droplet", v: "171 ha", t: "Humedal El Burro: 171 hectáreas en los años 50 (El Tiempo)" },
-      { i: "fa-cow", t: "Vacas en pastoreo, por fuera del agua" },
+      { i: "fa-cow", v: "264", t: "Ganado vacuno en pastoreo sobre las zonas verdes, por fuera del agua" },
       { i: "fa-tree", t: "Franjas de árboles junto al agua y bosquetes" }] },
     1956: { nombre: "Aeropuerto de Techo", icono: "fa-plane", chips: [
       { i: "fa-plane", t: "Aeropuerto de Techo" },
@@ -97,7 +97,8 @@
       { i: "fa-cow", t: "Vacas en pastoreo, por fuera del agua" },
       { i: "fa-tree", t: "Franjas de árboles junto al agua y bosquetes" }] },
     1972: { nombre: "Corabastos", icono: "fa-basket-shopping", chips: [
-      { i: "fa-droplet", v: "≈80 ha", t: "Aproximación: interpolación entre las 171 ha de los años 50 y las 27,14 ha de 1985" },
+      { i: "fa-droplet", v: "La Vaca ampliada", t: "Se muestran los dos sectores cartografiados del Humedal La Vaca, incluido el ámbito que llega hasta Corabastos" },
+      { i: "fa-basket-shopping", v: "420.000 m²", t: "Perímetro esquemático del predio de Corabastos, inaugurado en 1972" },
       { i: "fa-house", v: "1 piso", t: "Solo edificios de un piso, sin edificios sobre el humedal" },
       { i: "fa-road", t: "Calles reales; todavía sin avenidas principales" }] },
     1988: { nombre: "Humedal reducido", icono: "fa-droplet-slash", chips: [
