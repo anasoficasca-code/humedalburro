@@ -324,7 +324,7 @@
 
   const cowInstances = [];
   // Vacas alrededor de cada humedal: siempre por FUERA del agua, sobre el pasto, con una holgura para que al caminar no entren.
-  const COW_FRACTION = { 1950: 1, 1956: 1 }; // vacas solo en 1950 y 1956; desde 1972 ya no hay
+  const COW_FRACTION = { 1930: 1, 1950: 1, 1956: 1 }; // vacas solo en 1950 y 1956; desde 1972 ya no hay
   const COW_TOTALS = { Burro: 70, Vaca: 70, Techo: 50 };
   const COW_SCALE = 2.3; // chicas, pero todavia visibles a la distancia de la vista axonometrica
   const COW_MARGEN = 6;  // distancia minima al agua (unidades de escena)
@@ -393,7 +393,7 @@
   }
 
   // Arboles de 1950 y 1956: franjas de ribera, bosquetes y cortinas rompevientos (agrupados, no repartidos al azar)
-  const TREE_YEARS = { 1950: true, 1956: true };
+  const TREE_YEARS = { 1930: true, 1950: true, 1956: true };
   let histTreeTex = null;
   function colocarArbolesHistoricos(outlines, year) {
     histTreesGroup.clear();
@@ -441,7 +441,7 @@
 
   // Aves del humedal: patos, tinguas y garzas chicas que se mueven dentro del agua (cerca de un tercio del tamano de una vaca).
   // Con los anos quedan menos, pero nunca desaparecen: en la actualidad todavia queda al menos una de cada una en cada humedal.
-  const AVE_FRACTION = { 1950: 1, 1956: 1, 1972: 0.6, 1988: 0.3, 1995: 0.18, 2024: 0.07 };
+  const AVE_FRACTION = { 1930: 1, 1950: 1, 1956: 1, 1972: 0.6, 1988: 0.3, 1995: 0.18, 2024: 0.07 };
   const AVE_BASE = { Burro: { pato: 30, tingua: 18, garza: 8 }, Vaca: { pato: 30, tingua: 16, garza: 8 }, Techo: { pato: 20, tingua: 12, garza: 6 } };
   // Con un tercio del tamano de una vaca (1 a 3 px en pantalla) no se distinguian; AVE_ESCALA las deja cerca de la mitad de una vaca.
   const AVE_ESCALA = 1.7;
@@ -1007,7 +1007,7 @@
       btn.style.color = isActive ? "var(--accent)" : "var(--ink)";
     });
     const slider = document.getElementById("histYearSlider");
-    if (slider) slider.value = String(Math.max(0, [1950, 1956, 1972, 1988, 1995, 2024].indexOf(year >= 2024 ? 2024 : year))); // el deslizador va por posicion (0-4), no por año
+    if (slider) slider.value = String(Math.max(0, [1930, 1950, 1956, 1972, 1988, 1995, 2024].indexOf(year >= 2024 ? 2024 : year))); // el deslizador va por posicion (0-4), no por año
 
     const badge = document.getElementById("eraBadge");
     const desc = document.getElementById("eraDesc");
@@ -1029,6 +1029,8 @@
     cowsGroup.visible = true;
     historicalWetlandsGroup.visible = true;
     histTreesGroup.visible = year <= 1956; // mas arboles solo en 1950 y 1956
+    trafico.disponible = year >= 2024; cierresGroup.visible = trafico.disponible; // trafico y cierres solo en la actualidad
+    if (!trafico.disponible) { trafico.activo = false; trafico.ruido = false; trafico.modoCierre = false; renderer.domElement.style.cursor = ""; aplicarRuido(); emitirTrafico(); }
     userPlantedGroup.visible = true;
     customPolysGroup.visible = true;
 
@@ -1042,13 +1044,31 @@
       groundMesh.material.transparent = true;
     }
 
-    if (year === 1950) {
+    if (year === 1930) {
+      setEraNota("");
+      if (badge) badge.textContent = "1930 \u00b7 Aer\u00f3dromo de Techo";
+      if (desc) desc.textContent = "1930 \u00b7 Se inaugura el aer\u00f3dromo de Techo en plena sabana. No hay dato del humedal en 1930: se usa el de los a\u00f1os 50.";
+      cowsGroup.visible = true;
+      historicalWetlandsGroup.visible = true;
+      aeropuertoTechoGroup.visible = true;
+      corabastosGroup.visible = false;
+      roads1972Group.visible = false;
+      avCaliGroup.visible = false;
+      protechoGroup.visible = false;
+
+      if (rawWaterData) buildHistoricalWetlands(rawWaterData, 1930);
+
+      if (animateCam) {
+        const ap = nucleoCrecimiento(), cam = camParaPuntoArriba(ap.x, ap.z, new THREE.Vector3(-121.6, 755.4, 745.6), -60, 2.8);
+        transitionCameraTo(cam.pos, cam.target, 2.8, 2400); // 1930: enfocado en el aerodromo de Techo
+      }
+    } else if (year === 1950) {
       setEraNota("");
       if (badge) badge.textContent = "1950 · Sabana Rural";
       if (desc) desc.textContent = "1950 · Humedal El Burro (171 ha), La Vaca (181 ha) y Sabana Rural con 210 vacas en pastoreo y senderos veredales.";
       cowsGroup.visible = true;
       historicalWetlandsGroup.visible = true;
-      aeropuertoTechoGroup.visible = false;
+      aeropuertoTechoGroup.visible = true; // el aeropuerto funciona de 1930 a 1959
       corabastosGroup.visible = false;
       roads1972Group.visible = false;
       avCaliGroup.visible = false;
@@ -1151,6 +1171,7 @@
     } else if (year >= 2024) {
       aplicarCrecimiento(); setEraNota("");
       colocarAves(contornosModernos(rawWaterData), 2024); // en la actualidad quedan pocas aves, en los humedales que sobreviven
+      fijarTrafico(true, true); // carros en movimiento y mapa de ruido
       if (badge) badge.textContent = "Actualidad (2024)";
       if (desc) desc.textContent = "Actualidad · Modelo axonométrico arquitectónico urbano completo de Kennedy con el Humedal El Burro protegido de 18,8 ha.";
       
@@ -1258,7 +1279,7 @@
     });
   });
 
-  const histYears = [1950, 1956, 1972, 1988, 1995, 2024];
+  const histYears = [1930, 1950, 1956, 1972, 1988, 1995, 2024];
   const histSlider = document.getElementById("histYearSlider");
   if (histSlider) {
     histSlider.addEventListener("input", () => {
@@ -1451,6 +1472,7 @@
   //  - humedal: no se muestran edificios ni vias sobre el agua de esa epoca.
   //  - avenidas: las vias de clase "major" (avenidas principales, glorietas) aparecen en los anos 90.
   const ERA_REGLAS = {
+    1930: { f: 0, unPiso: true, avenidas: false, humedal: true },
     1950: { f: 0, unPiso: true, avenidas: false, humedal: true },
     1956: { f: 0, unPiso: true, avenidas: false, humedal: true },
     1972: { f: 0.25, unPiso: true, avenidas: false, humedal: true },
@@ -1565,6 +1587,7 @@
     notaEdificios: (document.getElementById("eraNota") || {}).textContent || "",
     crecimiento: estadoCrecimiento,
     viasTrazadasAMano: roads1972Group.children.length,
+    aeropuertoVisible: aeropuertoTechoGroup.visible, ruidoVisible: noiseMesh ? noiseMesh.visible : null, instanciasCarros: vehInstanced.count, escalaCarro: trafico.activo ? ESCALA_CARRO : 1, tVehiculos: Math.round(trafico.t), cierresVisibles: cierresGroup.visible && cierresGroup.children.length,
     aves: (() => { const c = { pato: 0, tingua: 0, garza: 0, fuera: 0 }; aveInstances.forEach(b => { c[b.tipo]++; if (!pointInPoly(b.mesh.position.x, b.mesh.position.z, b.pts)) c.fuera++; }); return c; })(),
     aeropuertoEnPantalla: (() => { const a = nucleoCrecimiento(), v = new THREE.Vector3(a.x, 0, a.z).project(camera); return [Math.round((v.x + 1) / 2 * window.innerWidth), Math.round((1 - v.y) / 2 * window.innerHeight)]; })(),
     volumenesInventados: corabastosGroup.children.length + protechoGroup.children.length
@@ -2639,14 +2662,18 @@
   }
 
   function renderVehiclesAt(t) {
-    const vehicles = vehiclesAtTime(t);
+    let vehicles = vehiclesAtTime(t);
+    if (cierres.length) { const antes = vehicles.length; vehicles = vehicles.filter(v => !cercaDeCierre(v.x, v.y)); trafico.retirados = antes - vehicles.length; } else trafico.retirados = 0;
+    trafico.carros = vehicles.length;
+    const esc = trafico.activo ? ESCALA_CARRO : 1; // en la simulacion los carros se agrandan para que se vean
     const n = Math.min(vehicles.length, VEH_POOL_SIZE);
     for (let i = 0; i < n; i++) {
       const v = vehicles[i];
       const p = toScene(v.x, v.y);
       const angle = lastAngle[v.id] || 0;
-      dummy.position.set(p.x, 0.1, p.z);
+      dummy.position.set(p.x, 0.04 + 0.075 * esc, p.z);
       dummy.rotation.set(0, angle, 0);
+      dummy.scale.set(esc, esc, esc);
       dummy.updateMatrix();
       vehInstanced.setMatrixAt(i, dummy.matrix);
     }
@@ -2685,6 +2712,7 @@
       buildGround(data.bbox);
       buildNoiseGround(data.bbox);
       buildRoads(data.edges);
+      netEdges = data.edges; // para cerrar calles con un clic
       const w = (data.bbox[2] - data.bbox[0]) * SCALE;
       const h = (data.bbox[3] - data.bbox[1]) * SCALE;
       sceneExtentW = w; sceneExtentH = h;
@@ -3062,6 +3090,188 @@
     updateSectionBox();
   }
 
+  // =====================================================================
+  // Trafico y ruido en la actualidad: carros que se mueven (trayectorias de la simulacion), mapa de ruido que se recalcula con
+  // donde estan los carros, y cierre de calles. Los carros que pasan a menos de R_CIERRE metros de una calle cerrada se retiran
+  // (no se simula el desvio del trafico hacia otras vias), asi que el ruido baja alli porque ya no hay carros.
+  // =====================================================================
+  let netEdges = [];
+  const trafico = { disponible: false, activo: false, ruido: false, modoCierre: false, t: 700, carros: 0, retirados: 0 };
+  const TRAFICO_T0 = 700, TRAFICO_VEL = 3, HASH_C = 40, R_CIERRE = 14, ESCALA_CARRO = 3.2;
+  const cierres = [];
+  let cierreId = 0, hashCierre = new Map(), presetsCierre = null, tTrafAnt = null;
+  const cierresGroup = new THREE.Group();
+  sceneRoot.add(cierresGroup);
+  function emitirTrafico() { window.dispatchEvent(new CustomEvent("trafico:cambio")); }
+  function desdeEscena(x, z) { return { x: x / SCALE + netCenter.x, y: -z / SCALE + netCenter.y }; }
+  function densificarLinea(P, paso) {
+    const out = [];
+    for (let i = 0; i < P.length - 1; i++) {
+      const a = P[i], b = P[i + 1], L = Math.hypot(b[0] - a[0], b[1] - a[1]), n = Math.max(1, Math.floor(L / paso));
+      for (let k = 0; k < n; k++) out.push([a[0] + (b[0] - a[0]) * k / n, a[1] + (b[1] - a[1]) * k / n]);
+    }
+    if (P.length) out.push(P[P.length - 1]);
+    return out;
+  }
+  function largoLinea(P) { let s = 0; for (let i = 0; i < P.length - 1; i++) s += Math.hypot(P[i + 1][0] - P[i][0], P[i + 1][1] - P[i][1]); return s; }
+  function reconstruirHashCierre() {
+    hashCierre = new Map();
+    cierres.forEach(c => c.lineas.forEach(L => densificarLinea(L, 10).forEach(p => {
+      const k = Math.floor(p[0] / HASH_C) + "," + Math.floor(p[1] / HASH_C);
+      let a = hashCierre.get(k); if (!a) hashCierre.set(k, a = []); a.push(p);
+    })));
+  }
+  function cercaDeCierre(x, y) {
+    if (!hashCierre.size) return false;
+    const cx = Math.floor(x / HASH_C), cy = Math.floor(y / HASH_C);
+    for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) {
+      const a = hashCierre.get((cx + i) + "," + (cy + j)); if (!a) continue;
+      for (let k = 0; k < a.length; k++) { const dx = a[k][0] - x, dy = a[k][1] - y; if (dx * dx + dy * dy < R_CIERRE * R_CIERRE) return true; }
+    }
+    return false;
+  }
+  function reconstruirVisualCierres() {
+    cierresGroup.clear();
+    const pos = [];
+    cierres.forEach(c => c.lineas.forEach(L => {
+      const P = L.map(p => toScene(p[0], p[1]));
+      for (let i = 0; i < P.length - 1; i++) {
+        const a = P[i], b = P[i + 1], dx = b.x - a.x, dz = b.z - a.z, len = Math.hypot(dx, dz) || 1e-3, nx = -dz / len * 1.5, nz = dx / len * 1.5, y = 0.32;
+        pos.push(a.x + nx, y, a.z + nz, a.x - nx, y, a.z - nz, b.x + nx, y, b.z + nz, b.x + nx, y, b.z + nz, a.x - nx, y, a.z - nz, b.x - nx, y, b.z - nz);
+      }
+    }));
+    if (!pos.length) return;
+    const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+    const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: 0xc4493a, transparent: true, opacity: 0.92, side: THREE.DoubleSide, depthWrite: false }));
+    m.renderOrder = 40; cierresGroup.add(m);
+  }
+  function calcularMarcasCierre() {
+    // iconos de "cerrado": cada ~550 m a lo largo de la calle (maximo 8 por cierre)
+    cierres.forEach(c => {
+      const marcas = [], ordenadas = c.lineas.slice().sort((a, b) => largoLinea(b) - largoLinea(a));
+      ordenadas.forEach(L => {
+        if (marcas.length >= 8) return;
+        const m = L[Math.floor(L.length / 2)], s = toScene(m[0], m[1]);
+        if (marcas.every(q => Math.hypot(q[0] - s.x, q[1] - s.z) > 55)) marcas.push([s.x, s.z]);
+      });
+      c.marcas = marcas;
+    });
+  }
+  function cierresCambiaron() {
+    reconstruirHashCierre(); reconstruirVisualCierres(); calcularMarcasCierre();
+    if (timesteps.length) renderVehiclesAt(trafico.t);
+    emitirTrafico();
+  }
+  function aplicarRuido() { if (noiseMesh) noiseMesh.visible = trafico.disponible && trafico.activo && trafico.ruido; }
+  function fijarTrafico(activo, ruido) {
+    trafico.activo = !!activo; trafico.ruido = !!ruido; aplicarRuido();
+    if (trafico.activo && timesteps.length) renderVehiclesAt(trafico.t);
+    emitirTrafico();
+  }
+  function alternarPreset(clave) {
+    if (!presetsCierre || !presetsCierre[clave]) return false;
+    const i = cierres.findIndex(c => c.grupo === clave);
+    if (i >= 0) cierres.splice(i, 1);
+    else cierres.push({ id: ++cierreId, grupo: clave, nombre: presetsCierre[clave].nombre, lineas: presetsCierre[clave].lineas });
+    cierresCambiaron(); return true;
+  }
+  function alternarPresetsAmbos() {
+    // un solo boton: si alguna de las dos esta abierta se cierran ambas; si las dos estan cerradas se reabren
+    const ambas = ["cali", "americas"].every(k => cierres.some(c => c.grupo === k));
+    ["cali", "americas"].forEach(k => { const i = cierres.findIndex(c => c.grupo === k); if (ambas && i >= 0) cierres.splice(i, 1); else if (!ambas && i < 0 && presetsCierre && presetsCierre[k]) cierres.push({ id: ++cierreId, grupo: k, nombre: presetsCierre[k].nombre, lineas: presetsCierre[k].lineas }); });
+    cierresCambiaron();
+  }
+  function reabrirTodo() { cierres.length = 0; cierresCambiaron(); }
+  fetch("./assets/vias_cierre.json").then(r => r.ok ? r.json() : null).then(d => { if (d) { presetsCierre = d; emitirTrafico(); } }).catch(() => {});
+
+  // ---- cerrar una calle con un clic: se busca la via mas cercana y se sigue la misma calle hacia los dos lados ----
+  let gridRed = null, extremosRed = null;
+  const GRID_R = 50, claveExtremo = p => Math.round(p[0] / 3) + "," + Math.round(p[1] / 3);
+  function construirIndiceRed() {
+    gridRed = new Map(); extremosRed = new Map();
+    netEdges.forEach(([cl, P], k) => {
+      densificarLinea(P, 20).forEach(p => { const key = Math.floor(p[0] / GRID_R) + "," + Math.floor(p[1] / GRID_R); let a = gridRed.get(key); if (!a) gridRed.set(key, a = new Set()); a.add(k); });
+      [P[0], P[P.length - 1]].forEach(p => { const key = claveExtremo(p); let a = extremosRed.get(key); if (!a) extremosRed.set(key, a = []); if (!a.includes(k)) a.push(k); });
+    });
+  }
+  function distPuntoPolilinea(x, y, P) {
+    let d = Infinity;
+    for (let i = 0; i < P.length - 1; i++) {
+      const a = P[i], b = P[i + 1], dx = b[0] - a[0], dy = b[1] - a[1], l2 = dx * dx + dy * dy || 1e-9, t = Math.max(0, Math.min(1, ((x - a[0]) * dx + (y - a[1]) * dy) / l2));
+      d = Math.min(d, Math.hypot(x - (a[0] + t * dx), y - (a[1] + t * dy)));
+    }
+    return d;
+  }
+  function aristaMasCercana(x, y, maxD) {
+    if (!gridRed) construirIndiceRed();
+    const cx = Math.floor(x / GRID_R), cy = Math.floor(y / GRID_R), vistos = new Set();
+    let mejor = null;
+    for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) {
+      const a = gridRed.get((cx + i) + "," + (cy + j)); if (!a) continue;
+      a.forEach(k => { if (vistos.has(k)) return; vistos.add(k); const d = distPuntoPolilinea(x, y, netEdges[k][1]); if (d <= maxD && (!mejor || d < mejor.d)) mejor = { k, d }; });
+    }
+    return mejor;
+  }
+  function calleDesdeArista(k0) {
+    const visitadas = new Set([k0]), lineas = [netEdges[k0][1]];
+    const rumbo = (a, b) => Math.atan2(b[1] - a[1], b[0] - a[0]);
+    function extender(P, haciaFinal) {
+      let actual = P, fin = haciaFinal, largo = 0;
+      for (let it = 0; it < 60 && largo < 1500; it++) {
+        const n = actual.length, pFin = fin ? actual[n - 1] : actual[0], pAnt = fin ? actual[Math.max(0, n - 2)] : actual[Math.min(1, n - 1)], dir = rumbo(pAnt, pFin);
+        let mejor = null;
+        (extremosRed.get(claveExtremo(pFin)) || []).forEach(j => {
+          if (visitadas.has(j)) return;
+          const Q = netEdges[j][1], empiezaAqui = claveExtremo(Q[0]) === claveExtremo(pFin);
+          const dq = empiezaAqui ? rumbo(Q[0], Q[Math.min(1, Q.length - 1)]) : rumbo(Q[Q.length - 1], Q[Math.max(0, Q.length - 2)]);
+          let d = dq - dir; d = Math.abs(Math.atan2(Math.sin(d), Math.cos(d)));
+          if (d < 0.5 && (!mejor || d < mejor.d)) mejor = { j, d, empiezaAqui };
+        });
+        if (!mejor) break;
+        visitadas.add(mejor.j); const Q = netEdges[mejor.j][1]; lineas.push(Q); largo += largoLinea(Q);
+        actual = mejor.empiezaAqui ? Q : Q.slice().reverse(); fin = true;
+      }
+    }
+    extender(netEdges[k0][1], true); extender(netEdges[k0][1], false);
+    return lineas;
+  }
+  function cerrarEnPuntoRed(x, y) {
+    if (!netEdges.length) return null;
+    // si el clic cae sobre una calle ya cerrada con un clic, se reabre
+    for (let i = 0; i < cierres.length; i++) {
+      if (cierres[i].grupo !== "calle") continue;
+      if (cierres[i].lineas.some(L => distPuntoPolilinea(x, y, L) < 25)) { cierres.splice(i, 1); cierresCambiaron(); return { reabierta: true }; }
+    }
+    const a = aristaMasCercana(x, y, 35); if (!a) return null;
+    const lineas = calleDesdeArista(a.k);
+    cierres.push({ id: ++cierreId, grupo: "calle", nombre: "Calle cerrada", lineas });
+    cierresCambiaron(); return { cerrada: true, tramos: lineas.length, metros: Math.round(lineas.reduce((s, L) => s + largoLinea(L), 0)) };
+  }
+  function cerrarEnEscena(sx, sz) { const p = desdeEscena(sx, sz); return cerrarEnPuntoRed(p.x, p.y); }
+  let bajadaCierre = null;
+  window.addEventListener("pointerdown", e => { bajadaCierre = { x: e.clientX, y: e.clientY, t: performance.now() }; }, true);
+  window.addEventListener("pointerup", e => {
+    if (!trafico.modoCierre || !bajadaCierre || e.target !== renderer.domElement) return;
+    const movido = Math.hypot(e.clientX - bajadaCierre.x, e.clientY - bajadaCierre.y), dur = performance.now() - bajadaCierre.t; bajadaCierre = null;
+    if (movido > 6 || dur > 500) return;
+    e.stopImmediatePropagation(); e.stopPropagation();
+    const r = renderer.domElement.getBoundingClientRect(), ndc = new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+    camera.updateMatrixWorld(); raycaster.setFromCamera(ndc, camera);
+    const pt = new THREE.Vector3();
+    if (raycaster.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), pt)) cerrarEnEscena(pt.x, pt.z);
+  }, true);
+  window.__trafico = {
+    estado: () => ({ disponible: trafico.disponible, activo: trafico.activo, ruido: trafico.ruido, modoCierre: trafico.modoCierre, carros: trafico.carros, retirados: trafico.retirados, presets: !!presetsCierre,
+      cierres: cierres.map(c => ({ id: c.id, grupo: c.grupo, nombre: c.nombre, marcas: c.marcas || [] })) }),
+    alternarActivo: () => fijarTrafico(!trafico.activo, trafico.ruido),
+    alternarRuido: () => fijarTrafico(trafico.activo, !trafico.ruido),
+    alternarCaliAmericas: alternarPresetsAmbos,
+    alternarModoCierre: () => { trafico.modoCierre = !trafico.modoCierre; renderer.domElement.style.cursor = trafico.modoCierre ? "crosshair" : ""; emitirTrafico(); },
+    reabrirTodo,
+    reabrir: id => { const i = cierres.findIndex(c => c.id === id); if (i >= 0) { cierres.splice(i, 1); cierresCambiaron(); } },
+    cerrarEnEscena
+  };
+
   function animate(now) {
     requestAnimationFrame(animate);
     if (camAnim) camAnim.update(now);
@@ -3078,6 +3288,9 @@
     }
     // aves del humedal: nadan y caminan dentro del agua
     { const dtAve = tAveAnt == null ? 0 : Math.min(0.1, (now - tAveAnt) / 1000); tAveAnt = now; moverAves(dtAve); }
+    // trafico de la actualidad: los carros avanzan por las trayectorias de la simulacion (vuelve a empezar al terminar)
+    { const dtT = tTrafAnt == null ? 0 : Math.min(0.1, (now - tTrafAnt) / 1000); tTrafAnt = now;
+      if (trafico.activo && trafico.disponible && timesteps.length) { trafico.t += dtT * TRAFICO_VEL; if (trafico.t > timesteps[timesteps.length - 1].time) trafico.t = TRAFICO_T0; renderVehiclesAt(trafico.t); } }
     if (playing && timesteps.length && slider) {
       if (lastFrameAt == null) lastFrameAt = now;
       const dt = (now - lastFrameAt) / 1000;

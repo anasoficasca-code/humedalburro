@@ -16,10 +16,10 @@
   const EE = F("El Espectador", "El Espectador, «El humedal El Burro perdió el 89 % de su ecosistema»", "https://www.elespectador.com/bogota/el-humedal-el-burro-perdio-el-89-de-su-ecosistema-por-la-urbanizacion-de-bogota-article-891072/");
   // etapa: la epoca del modelo 3D con la que se asocia el hito (1950, 1956, 1972, 1988, 1995 = años 90, 2024 = actualidad)
   const EVENTOS = [
-    { id: "techo-1930", anio: 1930, fecha: "7 de agosto de 1930", tema: "aeropuerto", etapa: 1950, icono: "fa-plane",
+    { id: "techo-1930", anio: 1930, fecha: "7 de agosto de 1930", tema: "aeropuerto", etapa: 1930, icono: "fa-plane",
       titulo: "Se inaugura el aeródromo de Techo",
-      resumen: "Es el primer aeropuerto de Bogotá y funciona hasta 1959.",
-      fuentes: [F("Wikipedia", "Wikipedia, «Techo International Airport (Colombia)»", "https://en.wikipedia.org/wiki/Techo_International_Airport_(Colombia)")] },
+      resumen: "SCADTA (fundada en 1919) abre una pista en Techo hacia 1928. Es el primer aeropuerto de Bogotá y funciona de 1930 a 1959.",
+      fuentes: [F("Wikipedia (es)", "Wikipedia, «Aeropuerto de Techo»", "https://es.wikipedia.org/wiki/Aeropuerto_de_Techo"), F("Wikipedia (en)", "Wikipedia, «Techo International Airport (Colombia)»", "https://en.wikipedia.org/wiki/Techo_International_Airport_(Colombia)")] },
     { id: "panamericana-1948", anio: 1948, fecha: "abril de 1948", tema: "aeropuerto", etapa: 1950, icono: "fa-landmark",
       titulo: "Conferencia Panamericana",
       resumen: "Los delegados llegan por el aeropuerto de Techo. El 9 de abril matan a Gaitán y la conferencia se traslada al Gimnasio Moderno.",
@@ -81,7 +81,13 @@
   ];
   // lo que se ve en el mapa en cada epoca del modelo
   const ERAS = {
+    1930: { nombre: "Aeródromo de Techo", anioTxt: "1930", icono: "fa-plane-up", chips: [
+      { i: "fa-plane", t: "Aeródromo de Techo, recién inaugurado" },
+      { i: "fa-droplet", v: "171 ha", t: "Sin dato de 1930: se usa el de los años 50 (El Burro: 171 hectáreas, El Tiempo)" },
+      { i: "fa-cow", t: "Vacas en pastoreo, por fuera del agua" },
+      { i: "fa-tree", t: "Franjas de árboles junto al agua y bosquetes" }] },
     1950: { nombre: "Sabana rural", icono: "fa-wheat-awn", chips: [
+      { i: "fa-plane", t: "El aeropuerto de Techo funciona de 1930 a 1959" },
       { i: "fa-droplet", v: "171 ha", t: "Humedal El Burro: 171 hectáreas en los años 50 (El Tiempo)" },
       { i: "fa-cow", t: "Vacas en pastoreo, por fuera del agua" },
       { i: "fa-tree", t: "Franjas de árboles junto al agua y bosquetes" }] },
@@ -106,6 +112,7 @@
       { i: "fa-road", t: "Calles reales" }] },
     2024: { nombre: "Actualidad", anioTxt: "Hoy", icono: "fa-city", chips: [
       { i: "fa-droplet", v: "18,8 ha", t: "Humedal protegido de 18,8 hectáreas (El Tiempo, Universidad Nacional)" },
+      { i: "fa-car", t: "Simulación de tráfico y mapa de ruido; se pueden cerrar calles" },
       { i: "fa-house", t: "Casas" },
       { i: "fa-building", t: "Edificios en altura" },
       { i: "fa-route", t: "Avenidas principales" },
@@ -209,7 +216,7 @@
     pintarEra(); pintarGrilla(); pintarDetalle();
 
     // ---- iconos sobre el territorio: aparecen a medida que pasan las epocas, en el lugar donde ocurre cada hito ----
-    const ORDEN_ERA = [1950, 1956, 1972, 1988, 1995, 2024];
+    const ORDEN_ERA = [1930, 1950, 1956, 1972, 1988, 1995, 2024];
     const LUGAR = {
       "techo-1930": ["techo", 0], "panamericana-1948": ["techo", 1], "dorado-1959": ["techo", 2], "piedra-1961": ["techo", 3],
       "nombre-1963": ["techo", 4], "concejo-1967": ["techo", 5], "buses-1969": ["techo", 6], "cabildo-1993": ["techo", 7],
