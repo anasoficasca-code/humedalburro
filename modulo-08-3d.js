@@ -331,12 +331,23 @@
 
   const cowInstances = [];
   // Vacas alrededor de cada humedal: siempre por FUERA del agua, sobre el pasto, con una holgura para que al caminar no entren.
-  const COW_FRACTION = { 1930: 1, 1950: 1, 1956: 1 }; // vacas solo en 1930, 1950 y 1956; desde 1972 ya no hay
+  const COW_FRACTION = { 1900: 1.4, 1920: 1, 1950: 1, 1956: 1 }; // vacas en 1900 (más), 1920, 1950 y 1956; desde 1972 ya no hay
   const COW_TOTALS = { Burro: 150, Vaca: 170, Techo: 110 };
   const COW_SCALE = 1.6; // más chicas que antes, todavía visibles a la distancia de la vista axonométrica
   const COW_MARGEN = 6;  // distancia minima al agua (unidades de escena)
   let lastOutlines = [];
-  function createCows() { cowsGroup.clear(); cowInstances.length = 0; } // se colocan al construir los humedales
+  // Vacas instanciadas por textura (12 grupos + 1 malla de sombras): cientos de vacas en ~13 llamadas de dibujo.
+  const cowGeo = new THREE.PlaneGeometry(1.6, 1.1);
+  const cowShadowGeo = new THREE.PlaneGeometry(1.5, 0.8);
+  const cowShadowMat = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.28, depthWrite: false });
+  let cowMeshes = [], cowMats = [], cowShadowMesh = null;
+  const _cowDummy = new THREE.Object3D();
+  function createCows() {
+    cowsGroup.clear(); cowInstances.length = 0;
+    cowMeshes.forEach(m => { if (m) m.dispose(); }); cowMeshes = [];
+    cowMats.forEach(m => { if (m) m.dispose(); }); cowMats = [];
+    if (cowShadowMesh) { cowShadowMesh.dispose(); cowShadowMesh = null; }
+  } // se colocan al construir los humedales
   function pointInPoly(x, z, poly) {
     let inside = false;
     for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
@@ -382,39 +393,67 @@
           if (!libre) r += 6;
         } while (!libre && tries < 14);
         if (!libre) continue; // si no hay un lugar seco, esa vaca no se pone (nunca queda dentro del agua)
-        const tex = cowTextures[Math.floor(rnd() * cowTextures.length)];
-        const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, side: THREE.DoubleSide, alphaTest: 0.35, depthWrite: false });
-        const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 1.1), mat);
-        const shadowMesh = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 0.8), new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.28, depthWrite: false }));
-        shadowMesh.rotation.x = -Math.PI / 2;
-        shadowMesh.position.set(0, -0.48, 0);
-        mesh.add(shadowMesh);
-        shadowMesh.renderOrder = 28; mesh.renderOrder = 30; // se dibujan despues del suelo y del agua
+        const texIdx = Math.floor(rnd() * cowTextures.length);
         const baseY = 0.55 * COW_SCALE;
-        mesh.position.set(x, baseY, z);
-        mesh.rotation.x = -Math.PI / 4.2;
-        mesh.rotation.y = (rnd() - 0.5) * 0.3;
         const sc = (0.85 + rnd() * 0.3) * COW_SCALE;
-        mesh.scale.set((rnd() > 0.5 ? 1 : -1) * sc, sc, sc);
-        cowsGroup.add(mesh);
-        cowInstances.push({ mesh, baseX: x, baseZ: z, baseY, phase: rnd() * Math.PI * 2, speed: 0.3 + rnd() * 0.4, wanderR: 0.8 + rnd() * 1.4 });
+        cowInstances.push({ texIdx, baseX: x, baseZ: z, x, z, baseY, sc, flip: (rnd() > 0.5 ? 1 : -1), rotY: (rnd() - 0.5) * 0.3, phase: rnd() * Math.PI * 2, speed: 0.3 + rnd() * 0.4, wanderR: 0.8 + rnd() * 1.4 });
       }
     });
+    construirVacasInstanciadas();
+  }
+  function construirVacasInstanciadas() {
+    if (!cowInstances.length) return;
+    const porTex = cowTextures.map(() => []);
+    cowInstances.forEach((c, i) => { c.slot = porTex[c.texIdx].length; porTex[c.texIdx].push(i); });
+    porTex.forEach((lista, t) => {
+      if (!lista.length) return;
+      const mat = new THREE.MeshBasicMaterial({ map: cowTextures[t], transparent: true, side: THREE.DoubleSide, alphaTest: 0.35, depthWrite: false });
+      cowMats[t] = mat;
+      const im = new THREE.InstancedMesh(cowGeo, mat, lista.length);
+      im.renderOrder = 30; im.frustumCulled = false; // se dibujan despues del suelo y del agua
+      cowsGroup.add(im); cowMeshes[t] = im;
+    });
+    cowShadowMesh = new THREE.InstancedMesh(cowShadowGeo, cowShadowMat, cowInstances.length);
+    cowShadowMesh.renderOrder = 28; cowShadowMesh.frustumCulled = false;
+    cowsGroup.add(cowShadowMesh);
+    actualizarVacasInstanciadas(0);
+  }
+  function actualizarVacasInstanciadas(t) {
+    for (let i = 0; i < cowInstances.length; i++) {
+      const c = cowInstances[i];
+      const x = c.baseX + Math.sin(t * 0.15 * c.speed + c.phase) * c.wanderR;
+      const z = c.baseZ + Math.cos(t * 0.15 * c.speed + c.phase) * c.wanderR;
+      c.x = x; c.z = z;
+      _cowDummy.position.set(x, c.baseY, z);
+      _cowDummy.rotation.set(-Math.PI / 4.2, c.rotY, 0);
+      _cowDummy.scale.set(c.flip * c.sc, c.sc, c.sc);
+      _cowDummy.updateMatrix();
+      cowMeshes[c.texIdx].setMatrixAt(c.slot, _cowDummy.matrix);
+      _cowDummy.position.set(x, 0.06, z);
+      _cowDummy.rotation.set(-Math.PI / 2, 0, 0);
+      _cowDummy.scale.set(c.sc, c.sc, c.sc);
+      _cowDummy.updateMatrix();
+      cowShadowMesh.setMatrixAt(i, _cowDummy.matrix);
+    }
+    cowMeshes.forEach(m => { if (m) m.instanceMatrix.needsUpdate = true; });
+    if (cowShadowMesh) cowShadowMesh.instanceMatrix.needsUpdate = true;
   }
 
   // Arboles de 1950 y 1956: franjas de ribera, bosquetes y cortinas rompevientos (agrupados, no repartidos al azar)
-  const TREE_YEARS = { 1930: true, 1950: true, 1956: true };
+  const TREE_YEARS = { 1900: true, 1920: true, 1950: true, 1956: true };
   let histTreeTex = null;
   function colocarArbolesHistoricos(outlines, year) {
     histTreesGroup.clear();
     if (!TREE_YEARS[year]) return;
     const polys = outlines.map(o => o.pts), rnd = mulberry32(1900 + year), items = [];
+    // En 1900 hay más árboles: se amplían franjas, bosquetes y cortinas.
+    const boostArboles = (year === 1900) ? 1.7 : 1;
     const gauss = () => Math.sqrt(-2 * Math.log(rnd() + 1e-9)) * Math.cos(2 * Math.PI * rnd());
     const ok = (x, z, m) => puntoLibreDeAgua(x, z, polys, m) && !isPointInRunway(x, z);
     const centro = o => { let cx = 0, cz = 0; o.pts.forEach(q => { cx += q.x; cz += q.z; }); return { x: cx / o.pts.length, z: cz / o.pts.length }; };
     // 1) franjas de ribera: densas junto al borde del agua y cada vez mas ralas hacia afuera
     outlines.forEach(o => {
-      const c = centro(o), n = Math.round(o.pts.length * 9);
+      const c = centro(o), n = Math.round(o.pts.length * 9 * boostArboles);
       for (let i = 0; i < n; i++) {
         const p = o.pts[Math.floor(rnd() * o.pts.length)];
         let dx = p.x - c.x, dz = p.z - c.z; const L = Math.hypot(dx, dz) || 1; dx /= L; dz /= L;
@@ -423,14 +462,14 @@
       }
     });
     // 2) bosquetes: grupos compactos en el pasto, a distintas distancias de los humedales
-    for (let b = 0; b < 110; b++) {
+    for (let b = 0; b < Math.round(110 * boostArboles); b++) {
       const o = outlines[Math.floor(rnd() * outlines.length)], p = o.pts[Math.floor(rnd() * o.pts.length)], c = centro(o);
       let dx = p.x - c.x, dz = p.z - c.z; const L = Math.hypot(dx, dz) || 1; dx /= L; dz /= L;
       const d = 20 + rnd() * 110, bx = p.x + dx * d + (rnd() - 0.5) * 40, bz = p.z + dz * d + (rnd() - 0.5) * 40, sig = 4 + rnd() * 7, cnt = 25 + Math.floor(rnd() * 55);
       for (let k = 0; k < cnt; k++) { const x = bx + gauss() * sig, z = bz + gauss() * sig; if (ok(x, z, 2)) items.push([x, z, 7 + rnd() * 7]); }
     }
     // 3) cortinas rompevientos: hileras rectas de arboles, todas con la misma orientacion
-    for (let r = 0; r < 24; r++) {
+    for (let r = 0; r < Math.round(24 * boostArboles); r++) {
       const o = outlines[Math.floor(rnd() * outlines.length)], p = o.pts[Math.floor(rnd() * o.pts.length)], c = centro(o);
       let dx = p.x - c.x, dz = p.z - c.z; const L = Math.hypot(dx, dz) || 1; dx /= L; dz /= L;
       const d = 25 + rnd() * 70, sx = p.x + dx * d, sz = p.z + dz * d, ang = 0.35 + (rnd() - 0.5) * 0.12, len = 25 + Math.floor(rnd() * 35);
@@ -451,7 +490,7 @@
 
   // Aves del humedal: patos, tinguas y garzas chicas que se mueven dentro del agua (cerca de un tercio del tamano de una vaca).
   // Con los anos quedan menos, pero nunca desaparecen: en la actualidad todavia queda al menos una de cada una en cada humedal.
-  const AVE_FRACTION = { 1930: 1, 1950: 1, 1956: 1, 1972: 0.6, 1988: 0.3, 1995: 0.18, 2024: 0.07 };
+  const AVE_FRACTION = { 1900: 1, 1920: 1, 1950: 1, 1956: 1, 1972: 0.6, 1988: 0.3, 1995: 0.18, 2024: 0.07 };
   const AVE_BASE = { Burro: { pato: 30, tingua: 18, garza: 8 }, Vaca: { pato: 30, tingua: 16, garza: 8 }, Techo: { pato: 20, tingua: 12, garza: 6 } };
   // Con un tercio del tamano de una vaca (1 a 3 px en pantalla) no se distinguian; AVE_ESCALA las deja cerca de la mitad de una vaca.
   const AVE_ESCALA = 1.7;
@@ -470,8 +509,8 @@
     avesGroup.clear(); aveInstances.length = 0;
     const f = AVE_FRACTION[year >= 2024 ? 2024 : year];
     if (!f || !outlines.length) return;
-    // En 1930/1950/1956 las vacas son más chicas: las aves se achican en la misma proporción para seguir viéndose como la mitad de una vaca. Los demás años no se tocan.
-    const escA = (year === 1930 || year === 1950 || year === 1956) ? 1.0 : AVE_ESCALA;
+    // En 1900–1956 las vacas son más chicas: las aves se achican en la misma proporción para seguir viéndose como la mitad de una vaca. Los demás años no se tocan.
+    const escA = (year <= 1956) ? 1.0 : AVE_ESCALA;
     const rnd = mulberry32(9100 + year);
     outlines.forEach(o => {
       const key = o.nombre.includes("Burro") ? "Burro" : (o.nombre.includes("Vaca") ? "Vaca" : "Techo"), base = AVE_BASE[key], pts = o.pts;
@@ -932,6 +971,36 @@
     runwayMesh.receiveShadow = true;
     aeropuertoTechoGroup.add(runwayMesh);
 
+    // A2. Falda suave alrededor de la pista para que no se vea "pegada" al pasto:
+    // dos anillos translúcidos que funden el gris con el verde.
+    function anilloExterior(pts, dist) {
+      const n = pts.length, cx = pts.reduce((s, p) => s + p.x, 0) / n, cz = pts.reduce((s, p) => s + p.z, 0) / n;
+      return pts.map((p1, i) => {
+        const p0 = pts[(i + n - 1) % n], p2 = pts[(i + 1) % n];
+        let e1x = p1.x - p0.x, e1z = p1.z - p0.z; const l1 = Math.hypot(e1x, e1z) || 1; e1x /= l1; e1z /= l1;
+        let e2x = p2.x - p1.x, e2z = p2.z - p1.z; const l2 = Math.hypot(e2x, e2z) || 1; e2x /= l2; e2z /= l2;
+        let nx = (e1z + e2z), nz = -(e1x + e2x);
+        if (nx * (p1.x - cx) + nz * (p1.z - cz) < 0) { nx = -nx; nz = -nz; }
+        const cosHalf = Math.max(0.6, Math.sqrt(Math.max(0.05, (1 + (e1x * e2x + e1z * e2z)) / 2)));
+        const m = dist / cosHalf;
+        return { x: p1.x + nx * m, z: p1.z + nz * m };
+      });
+    }
+    [[2.2, 0.16, 0.0305], [4.2, 0.08, 0.030]].forEach(([dd, op, yy]) => {
+      const q = anilloExterior(AEROPUERTO_RUNWAY_PTS, dd), pos2 = [];
+      for (let i = 0; i < q.length; i++) {
+        const a = AEROPUERTO_RUNWAY_PTS[i], b = AEROPUERTO_RUNWAY_PTS[(i + 1) % q.length];
+        const c = q[i], d = q[(i + 1) % q.length];
+        pos2.push(a.x, yy, a.z, b.x, yy, b.z, d.x, yy, d.z, a.x, yy, a.z, d.x, yy, d.z, c.x, yy, c.z);
+      }
+      const g2 = new THREE.BufferGeometry();
+      g2.setAttribute("position", new THREE.Float32BufferAttribute(pos2, 3));
+      g2.computeVertexNormals();
+      const m2 = new THREE.Mesh(g2, new THREE.MeshBasicMaterial({ color: 0xc9cfd3, transparent: true, opacity: op, depthWrite: false, side: THREE.DoubleSide }));
+      m2.renderOrder = 2;
+      aeropuertoTechoGroup.add(m2);
+    });
+
     // B. Vía de conexión (ribbon continuo en gris más claro)
     const roadPos = [], roadUv = [];
     const a = AEROPUERTO_ROAD_PTS[0], b = AEROPUERTO_ROAD_PTS[1];
@@ -966,10 +1035,11 @@
     roadMesh.receiveShadow = true;
     aeropuertoTechoGroup.add(roadMesh);
 
-    // C. Edificio Terminal y torre
-    const pos = toScene(8180.94, 2102.08); // Coordenadas en Techo
+    // C. Edificio Terminal y torre: en la puntita izquierda del polígono de la pista, hacia arriba.
+    let puntaX = Infinity, puntaZ = 0;
+    AEROPUERTO_RUNWAY_PTS.forEach(p => { if (p.x < puntaX) { puntaX = p.x; puntaZ = p.z; } });
     const group = new THREE.Group();
-    group.position.set(pos.x, 0, pos.z);
+    group.position.set(puntaX - 13, 0, puntaZ - 11);
 
     const wallMat = new THREE.MeshStandardMaterial({
       color: 0xf4f1ea,
@@ -1036,7 +1106,8 @@
       btn.style.color = isActive ? "var(--accent)" : "var(--ink)";
     });
     const slider = document.getElementById("histYearSlider");
-    if (slider) slider.value = String(Math.max(0, [1930, 1950, 1956, 1972, 1988, 1995, 2024].indexOf(year >= 2024 ? 2024 : year))); // el deslizador va por posicion (0-4), no por año
+    if (slider) slider.value = String(Math.max(0, [1900, 1920, 1950, 1956, 1972, 1988, 1995, 2024].indexOf(year >= 2024 ? 2024 : year))); // el deslizador va por posicion (0-4), no por año
+    if (typeof pintarTimeline === "function") pintarTimeline(year);
 
     const badge = document.getElementById("eraBadge");
     const desc = document.getElementById("eraDesc");
@@ -1076,10 +1147,32 @@
       groundMesh.material.transparent = true;
     }
 
-    if (year === 1930) {
+    if (year === 1900) {
       setEraNota("");
-      if (badge) badge.textContent = "1930 \u00b7 Aer\u00f3dromo de Techo";
-      if (desc) desc.textContent = "1930 \u00b7 Se inaugura el aer\u00f3dromo de Techo en plena sabana. No hay dato del humedal en 1930: se usa el de los a\u00f1os 50.";
+      if (badge) badge.textContent = "1900 \u00b7 Antes de Kennedy";
+      if (desc) desc.textContent = "1900 \u00b7 Antes de Kennedy hab\u00eda aqu\u00ed una laguna, ribera de inundaci\u00f3n del r\u00edo Bogot\u00e1. Los muiscas la llamaban chuco: agua viva.";
+      cowsGroup.visible = true;
+      historicalWetlandsGroup.visible = true;
+      aeropuertoTechoGroup.visible = false;
+      corabastosGroup.visible = false;
+      roads1972Group.visible = false;
+      avCaliGroup.visible = false;
+      protechoGroup.visible = false;
+
+      if (rawWaterData) buildHistoricalWetlands(rawWaterData, 1900);
+
+      if (animateCam) {
+        transitionCameraTo(
+          new THREE.Vector3(117.21, 724.68, 628.88),
+          new THREE.Vector3(219.64, -56.32, -92.84),
+          1.95,
+          2000
+        );
+      }
+    } else if (year === 1920) {
+      setEraNota("");
+      if (badge) badge.textContent = "1920 \u00b7 Aeropuerto de Techo";
+      if (desc) desc.textContent = "1920 \u00b7 El aer\u00f3dromo de Techo empieza a operar en plena sabana (SCADTA se fund\u00f3 en 1919); la inauguraci\u00f3n oficial es en 1930.";
       cowsGroup.visible = true;
       historicalWetlandsGroup.visible = true;
       aeropuertoTechoGroup.visible = true;
@@ -1088,19 +1181,19 @@
       avCaliGroup.visible = false;
       protechoGroup.visible = false;
 
-      if (rawWaterData) buildHistoricalWetlands(rawWaterData, 1930);
+      if (rawWaterData) buildHistoricalWetlands(rawWaterData, 1920);
 
       if (animateCam) {
         const ap = nucleoCrecimiento(), cam = camParaPuntoArriba(ap.x, ap.z, new THREE.Vector3(-121.6, 755.4, 745.6), -60, 2.8);
-        transitionCameraTo(cam.pos, cam.target, 2.8, 2400); // 1930: enfocado en el aerodromo de Techo
+        transitionCameraTo(cam.pos, cam.target, 2.8, 2400); // 1920: enfocado en el aerodromo de Techo
       }
     } else if (year === 1950) {
       setEraNota("");
       if (badge) badge.textContent = "1950 · Sabana Rural";
-      if (desc) desc.textContent = "1950 · Humedal El Burro (171 ha), La Vaca (181 ha) y Sabana Rural con 430 vacas en pastoreo y senderos veredales.";
+      if (desc) desc.textContent = "1950 · Humedal El Burro (171 ha), La Vaca (181 ha) y Sabana Rural con 530 vacas en pastoreo y senderos veredales.";
       cowsGroup.visible = true;
       historicalWetlandsGroup.visible = true;
-      aeropuertoTechoGroup.visible = true; // el aeropuerto funciona de 1930 a 1959
+      aeropuertoTechoGroup.visible = true; // el aeropuerto se muestra de 1920 a 1959
       corabastosGroup.visible = false;
       roads1972Group.visible = false;
       avCaliGroup.visible = false;
@@ -1119,7 +1212,7 @@
     } else if (year === 1956) {
       setEraNota("");
       if (badge) badge.textContent = "1956 · Aeropuerto Techo";
-      if (desc) desc.textContent = "1956 · Humedal La Vaca y Laguna de Techo extendidos hacia El Burro, Antiguo Aeropuerto de Techo con pista y vías de conexión.";
+      if (desc) desc.textContent = "1956 · Humedal La Vaca y Laguna de Techo en su posición real, Antiguo Aeropuerto de Techo con pista y vías de conexión.";
       cowsGroup.visible = true;
       historicalWetlandsGroup.visible = true;
       aeropuertoTechoGroup.visible = true;
@@ -1202,6 +1295,7 @@
       }
     } else if (year >= 2024) {
       aplicarCrecimiento(); setEraNota("");
+      if (!timesteps.length) loadVehicles(); // los vehículos solo se descargan al entrar a la actualidad
       colocarAves(contornosModernos(rawWaterData), 2024); // en la actualidad quedan pocas aves, en los humedales que sobreviven
       fijarTrafico(true, true); // carros en movimiento y mapa de ruido
       if (badge) badge.textContent = "Actualidad (2024)";
@@ -1311,12 +1405,18 @@
     });
   });
 
-  const histYears = [1930, 1950, 1956, 1972, 1988, 1995, 2024];
+  const histYears = [1900, 1920, 1950, 1956, 1972, 1988, 1995, 2024];
   const histSlider = document.getElementById("histYearSlider");
+  // Pinta el avance del deslizador y resalta la marca de la época activa.
+  function pintarTimeline(year) {
+    const idx = Math.max(0, histYears.indexOf(year >= 2024 ? 2024 : year));
+    if (histSlider) histSlider.style.setProperty("--p", (idx / (histYears.length - 1) * 100) + "%");
+    document.querySelectorAll("#timelineTicks span").forEach(s => s.classList.toggle("tick-now", Number(s.dataset.i) === idx));
+  }
   if (histSlider) {
     histSlider.addEventListener("input", () => {
       const idx = parseInt(histSlider.value, 10);
-      const y = histYears[idx] || 1950;
+      const y = histYears[idx] || 1900;
       setHistoricalYear(y, true);
     });
   }
@@ -1327,6 +1427,7 @@
     histPlayBtn.addEventListener("click", () => {
       histPlaying = !histPlaying;
       histPlayBtn.innerHTML = histPlaying ? '<i class="fa-solid fa-pause"></i>' : '<i class="fa-solid fa-play"></i>';
+      histPlayBtn.classList.toggle("playing", histPlaying);
       if (histPlaying) {
         histPlayTimer = setInterval(() => {
           const curIdx = histYears.indexOf(currentHistoricalYear);
@@ -1504,7 +1605,8 @@
   //  - humedal: no se muestran edificios ni vias sobre el agua de esa epoca.
   //  - avenidas: las vias de clase "major" (avenidas principales, glorietas) aparecen en los anos 90.
   const ERA_REGLAS = {
-    1930: { f: 0, unPiso: true, avenidas: false, humedal: true },
+    1900: { f: 0, unPiso: true, avenidas: false, humedal: true },
+    1920: { f: 0, unPiso: true, avenidas: false, humedal: true },
     1950: { f: 0, unPiso: true, avenidas: false, humedal: true },
     1956: { f: 0, unPiso: true, avenidas: false, humedal: true },
     1972: { f: 0.25, unPiso: true, avenidas: false, humedal: true },
@@ -1610,9 +1712,9 @@
     edificiosTotales: buildingGrowthVert.length,
     rangoDibujo: currentBuildingMesh ? currentBuildingMesh.geometry.drawRange.count : null,
     mallaVisible: currentBuildingMesh ? currentBuildingMesh.visible : null,
-    vacas: cowsGroup.children.length, vacasVisibles: cowsGroup.visible,
-    vacasEnAgua: cowsGroup.children.filter(c => lastOutlines.some(o => pointInPoly(c.position.x, c.position.z, o.pts))).length,
-    vacasCercaDelAgua: cowsGroup.children.filter(c => lastOutlines.some(o => distToPoly(c.position.x, c.position.z, o.pts) < 3)).length,
+    vacas: cowInstances.length, vacasVisibles: cowsGroup.visible,
+    vacasEnAgua: cowInstances.filter(c => lastOutlines.some(o => pointInPoly(c.x !== undefined ? c.x : c.baseX, c.z !== undefined ? c.z : c.baseZ, o.pts))).length,
+    vacasCercaDelAgua: cowInstances.filter(c => lastOutlines.some(o => distToPoly(c.x !== undefined ? c.x : c.baseX, c.z !== undefined ? c.z : c.baseZ, o.pts) < 3)).length,
     arboles: histTreesGroup.children.reduce((n, m) => n + (m.count || 0), 0), arbolesVisibles: histTreesGroup.visible,
     viasVisibles: modernRoadMesh ? modernRoadMesh.visible : null, rangoVias: modernRoadLines ? modernRoadLines.geometry.drawRange.count : null, avCaliVisible: avCaliGroup.visible,
     notaEdificios: (document.getElementById("eraNota") || {}).textContent || "",
@@ -2403,7 +2505,7 @@
         rawWaterData = data; // antes nunca se asignaba: el agua no se reconstruia al cambiar de epoca
         buildWaterBodies(data);
         buildHistoricalWetlands(data);
-        setHistoricalYear(1950, false);
+        setHistoricalYear(1900, false);
       })
       .catch(err => console.warn("No se pudieron cargar los cuerpos de agua:", err));
   }
@@ -2662,11 +2764,17 @@
   }
 
   let lastAngle = {}; // rumbo persistente por vehiculo, para no perderlo cuando esta detenido
+  // Los pasos de tiempo guardan los vehículos en crudo y solo se convierten
+  // cuando se usan: evita transformar los 55 MB de una vez al entrar a 2024.
+  function pasoVeh(ts) {
+    if (!ts.vehicles) ts.vehicles = ts.raw.map(([id, x, y]) => ({ id, x, y }));
+    return ts.vehicles;
+  }
   function vehiclesAtTime(t) {
     if (!timesteps.length) return [];
-    if (t <= timesteps[0].time) return timesteps[0].vehicles.map(v => ({ id: v.id, x: v.x, y: v.y }));
+    if (t <= timesteps[0].time) return pasoVeh(timesteps[0]).map(v => ({ id: v.id, x: v.x, y: v.y }));
     const last = timesteps[timesteps.length - 1];
-    if (t >= last.time) return last.vehicles.map(v => ({ id: v.id, x: v.x, y: v.y }));
+    if (t >= last.time) return pasoVeh(last).map(v => ({ id: v.id, x: v.x, y: v.y }));
     let lo = 0, hi = timesteps.length - 1;
     while (hi - lo > 1) {
       const mid = (lo + hi) >> 1;
@@ -2674,8 +2782,8 @@
     }
     const a = timesteps[lo], b = timesteps[hi];
     const frac = (t - a.time) / (b.time - a.time || 1);
-    const bMap = {}; b.vehicles.forEach(v => bMap[v.id] = v);
-    return a.vehicles.map(v => {
+    const bMap = {}; pasoVeh(b).forEach(v => bMap[v.id] = v);
+    return pasoVeh(a).map(v => {
       const bv = bMap[v.id];
       if (!bv) return { id: v.id, x: v.x, y: v.y };
       // El rumbo se calcula con el DESPLAZAMIENTO REAL entre 2 pasos de
@@ -2723,11 +2831,14 @@
     renderVehiclesAt(0);
   }
 
+  let vehLoading = false;
   function loadVehicles() {
+    if (vehLoading || timesteps.length) return Promise.resolve(); // solo se cargan una vez, al entrar a 2024
+    vehLoading = true;
     return fetch(VEHICULOS_JSON_URL)
       .then(r => { if (!r.ok) throw new Error("no se pudo cargar " + VEHICULOS_JSON_URL); return r.json(); })
       .then(data => {
-        timesteps = data.map(([time, vehicles]) => ({ time, vehicles: vehicles.map(([id, x, y]) => ({ id, x, y })) }));
+        timesteps = data.map(([time, vehicles]) => ({ time, raw: vehicles, vehicles: null }));
         finishLoadingTimesteps();
       })
       .catch(err => {
@@ -2761,10 +2872,13 @@
       loadBuildings();
       loadTrees();
       buildBirds();
-      loadManzanas();
       loadParques();
-      loadTriMesh("./assets/kennedy_facades.json", 0xa05a41);
-      return loadVehicles();
+      // Lo pesado que no se necesita al inicio se difiere a cuando el navegador esté libre:
+      // manzanas y fachadas (solo se ven en 2024) y vehículos (55 MB: solo se cargan al entrar a 2024).
+      const cuandoLibre = (fn) => { if ("requestIdleCallback" in window) requestIdleCallback(fn, { timeout: 6000 }); else setTimeout(fn, 2000); };
+      cuandoLibre(() => { loadManzanas(); });
+      cuandoLibre(() => { loadTriMesh("./assets/kennedy_facades.json", 0xa05a41); });
+      return Promise.resolve();
     })
     .catch(err => {
       console.error(err);
@@ -3309,13 +3423,7 @@
 
     // Animación de las vacas caminando en el terreno sin flotar
     if (cowsGroup.visible && cowInstances.length) {
-      const t = now * 0.001;
-      for (let i = 0; i < cowInstances.length; i++) {
-        const c = cowInstances[i];
-        c.mesh.position.y = c.baseY !== undefined ? c.baseY : 0.55; // Firme sobre el terreno
-        c.mesh.position.x = c.baseX + Math.sin(t * 0.15 * c.speed + c.phase) * c.wanderR;
-        c.mesh.position.z = c.baseZ + Math.cos(t * 0.15 * c.speed + c.phase) * c.wanderR;
-      }
+      actualizarVacasInstanciadas(now * 0.001);
     }
     // aves del humedal: nadan y caminan dentro del agua
     { const dtAve = tAveAnt == null ? 0 : Math.min(0.1, (now - tAveAnt) / 1000); tAveAnt = now; moverAves(dtAve); }

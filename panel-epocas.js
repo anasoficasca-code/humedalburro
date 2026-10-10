@@ -16,7 +16,7 @@
   const EE = F("El Espectador", "El Espectador, «El humedal El Burro perdió el 89 % de su ecosistema»", "https://www.elespectador.com/bogota/el-humedal-el-burro-perdio-el-89-de-su-ecosistema-por-la-urbanizacion-de-bogota-article-891072/");
   // etapa: la epoca del modelo 3D con la que se asocia el hito (1950, 1956, 1972, 1988, 1995 = años 90, 2024 = actualidad)
   const EVENTOS = [
-    { id: "techo-1930", anio: 1930, fecha: "7 de agosto de 1930", tema: "aeropuerto", etapa: 1930, icono: "fa-plane",
+    { id: "techo-1930", anio: 1930, fecha: "7 de agosto de 1930", tema: "aeropuerto", etapa: 1920, icono: "fa-plane",
       titulo: "Se inaugura el aeródromo de Techo",
       resumen: "SCADTA (fundada en 1919) abre una pista en Techo hacia 1928. Es el primer aeropuerto de Bogotá y funciona de 1930 a 1959.",
       fuentes: [F("Wikipedia (es)", "Wikipedia, «Aeropuerto de Techo»", "https://es.wikipedia.org/wiki/Aeropuerto_de_Techo"), F("Wikipedia (en)", "Wikipedia, «Techo International Airport (Colombia)»", "https://en.wikipedia.org/wiki/Techo_International_Airport_(Colombia)")] },
@@ -81,15 +81,19 @@
   ];
   // lo que se ve en el mapa en cada epoca del modelo
   const ERAS = {
-    1930: { nombre: "Aeródromo de Techo", anioTxt: "1930", icono: "fa-plane-up", chips: [
-      { i: "fa-plane", t: "Aeródromo de Techo, recién inaugurado" },
-      { i: "fa-droplet", v: "171 ha", t: "Sin dato de 1930: se usa el de los años 50 (El Burro: 171 hectáreas, El Tiempo)" },
+    1900: { nombre: "Antes de Kennedy", anioTxt: "1900", icono: "fa-water", chips: [
+      { i: "fa-droplet", v: "chuco", t: "«Agua viva» en muisca: laguna y ribera de inundación del río Bogotá, antes de Kennedy" },
+      { i: "fa-cow", v: "≈750", t: "Ganado vacuno en pastoreo sobre las zonas verdes, por fuera del agua" },
+      { i: "fa-tree", t: "Más árboles: franjas de ribera ampliadas y bosquetes" }] },
+    1920: { nombre: "Aeropuerto de Techo", anioTxt: "1920", icono: "fa-plane-up", chips: [
+      { i: "fa-plane", t: "El aeródromo de Techo empieza a operar (la inauguración oficial es en 1930)" },
+      { i: "fa-droplet", v: "171 ha", t: "Sin dato de 1920: se usa el de los años 50 (El Burro: 171 hectáreas, El Tiempo)" },
       { i: "fa-cow", t: "Vacas en pastoreo, por fuera del agua" },
       { i: "fa-tree", t: "Franjas de árboles junto al agua y bosquetes" }] },
     1950: { nombre: "Sabana rural", icono: "fa-wheat-awn", chips: [
-      { i: "fa-plane", t: "El aeropuerto de Techo funciona de 1930 a 1959" },
+      { i: "fa-plane", t: "El aeródromo de Techo opera desde 1920 (inauguración oficial en 1930) hasta 1959" },
       { i: "fa-droplet", v: "171 ha", t: "Humedal El Burro: 171 hectáreas en los años 50 (El Tiempo)" },
-      { i: "fa-cow", v: "264", t: "Ganado vacuno en pastoreo sobre las zonas verdes, por fuera del agua" },
+      { i: "fa-cow", v: "530", t: "Ganado vacuno en pastoreo sobre las zonas verdes, por fuera del agua" },
       { i: "fa-tree", t: "Franjas de árboles junto al agua y bosquetes" }] },
     1956: { nombre: "Aeropuerto de Techo", icono: "fa-plane", chips: [
       { i: "fa-plane", t: "Aeropuerto de Techo" },
@@ -153,9 +157,9 @@
     const pie = h("footer", { class: "ep-pie" }, ic("fa-circle-info"), h("span", { text: "Edificios y vías: aproximación; los datos no traen el año de construcción." }));
     [cab, chips, h("hr", { class: "ep-sep" }), filtrosEl, grilla, detalle, pie].forEach(x => raiz.appendChild(x));
 
-    function etapaActiva() { const a = document.querySelector(".year-btn.active"); return a ? Number(a.dataset.year) : 1950; }
+    function etapaActiva() { const a = document.querySelector(".year-btn.active"); return a ? Number(a.dataset.year) : 1900; }
     function pintarEra() {
-      const et = etapaActiva(), E = ERAS[et] || ERAS[1950];
+      const et = etapaActiva(), E = ERAS[et] || ERAS[1900];
       cab.innerHTML = "";
       cab.appendChild(h("div", { class: "ic" }, ic(E.icono)));
       cab.appendChild(h("div", null, h("div", { class: "ep-anio", text: E.anioTxt || String(et) }), h("div", { class: "ep-nombre", text: E.nombre })));
@@ -217,7 +221,7 @@
     pintarEra(); pintarGrilla(); pintarDetalle();
 
     // ---- iconos sobre el territorio: aparecen a medida que pasan las epocas, en el lugar donde ocurre cada hito ----
-    const ORDEN_ERA = [1930, 1950, 1956, 1972, 1988, 1995, 2024];
+    const ORDEN_ERA = [1900, 1920, 1950, 1956, 1972, 1988, 1995, 2024];
     const LUGAR = {
       "techo-1930": ["techo", 0], "panamericana-1948": ["techo", 1], "dorado-1959": ["techo", 2], "piedra-1961": ["techo", 3],
       "nombre-1963": ["techo", 4], "concejo-1967": ["techo", 5], "buses-1969": ["techo", 6], "cabildo-1993": ["techo", 7],
