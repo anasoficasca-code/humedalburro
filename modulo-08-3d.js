@@ -331,7 +331,7 @@
 
   const cowInstances = [];
   // Vacas alrededor de cada humedal: siempre por FUERA del agua, sobre el pasto, con una holgura para que al caminar no entren.
-  const COW_FRACTION = { 1900: 1.4, 1920: 1, 1950: 1, 1956: 1 }; // vacas en 1900 (más), 1920, 1950 y 1956; desde 1972 ya no hay
+  const COW_FRACTION = { 1900: 1.4, 1930: 1, 1950: 1, 1956: 1 }; // vacas en 1900 (más), 1930, 1950 y 1956; desde 1972 ya no hay
   const COW_TOTALS = { Burro: 150, Vaca: 170, Techo: 110, Tintal: 430 };
   const COW_SCALE = 1.6; // más chicas que antes, todavía visibles a la distancia de la vista axonométrica
   const COW_MARGEN = 6;  // distancia minima al agua (unidades de escena)
@@ -459,7 +459,7 @@
   }
 
   // Arboles de 1950 y 1956: franjas de ribera, bosquetes y cortinas rompevientos (agrupados, no repartidos al azar)
-  const TREE_YEARS = { 1900: true, 1920: true, 1950: true, 1956: true };
+  const TREE_YEARS = { 1900: true, 1930: true, 1950: true, 1956: true };
   let histTreeTex = null;
   function colocarArbolesHistoricos(outlines, year, avoid) {
     histTreesGroup.clear();
@@ -520,7 +520,7 @@
 
   // Aves del humedal: patos, tinguas y garzas chicas que se mueven dentro del agua (cerca de un tercio del tamano de una vaca).
   // Con los anos quedan menos, pero nunca desaparecen: en la actualidad todavia queda al menos una de cada una en cada humedal.
-  const AVE_FRACTION = { 1900: 1, 1920: 1, 1950: 1, 1956: 1, 1972: 0.6, 1988: 0.3, 1995: 0.18, 2024: 0.07 };
+  const AVE_FRACTION = { 1900: 1, 1930: 1, 1950: 1, 1956: 1, 1972: 0.6, 1988: 0.3, 1995: 0.18, 2024: 0.07 };
   const AVE_BASE = { Burro: { pato: 30, tingua: 18, garza: 8 }, Vaca: { pato: 30, tingua: 16, garza: 8 }, Techo: { pato: 20, tingua: 12, garza: 6 }, Tintal: { pato: 80, tingua: 46, garza: 22 } };
   // Con un tercio del tamano de una vaca (1 a 3 px en pantalla) no se distinguian; AVE_ESCALA las deja cerca de la mitad de una vaca.
   const AVE_ESCALA = 1.7;
@@ -1204,7 +1204,7 @@
       btn.style.color = isActive ? "var(--accent)" : "var(--ink)";
     });
     const slider = document.getElementById("histYearSlider");
-    if (slider) slider.value = String(Math.max(0, [1900, 1920, 1950, 1956, 1972, 1988, 1995, 2024].indexOf(year >= 2024 ? 2024 : year))); // el deslizador va por posicion (0-4), no por año
+    if (slider) slider.value = String(Math.max(0, [1900, 1930, 1950, 1956, 1972, 1988, 1995, 2024].indexOf(year >= 2024 ? 2024 : year))); // el deslizador va por posicion (0-4), no por año
     if (typeof pintarTimeline === "function") pintarTimeline(year);
 
     const badge = document.getElementById("eraBadge");
@@ -1267,10 +1267,10 @@
           2000
         );
       }
-    } else if (year === 1920) {
+    } else if (year === 1930) {
       setEraNota("");
-      if (badge) badge.textContent = "1920 \u00b7 Aeropuerto de Techo";
-      if (desc) desc.textContent = "1920 \u00b7 El aer\u00f3dromo de Techo empieza a operar en plena sabana (SCADTA se fund\u00f3 en 1919); la inauguraci\u00f3n oficial es en 1930.";
+      if (badge) badge.textContent = "1930 \u00b7 Aeropuerto de Techo";
+      if (desc) desc.textContent = "1930 \u00b7 El 7 de agosto se inaugura el aer\u00f3dromo de Techo (SCADTA) y opera hasta 1959. La laguna El Tintal empieza a fraccionarse.";
       cowsGroup.visible = true;
       historicalWetlandsGroup.visible = true;
       aeropuertoTechoGroup.visible = true;
@@ -1279,11 +1279,11 @@
       avCaliGroup.visible = false;
       protechoGroup.visible = false;
 
-      if (rawWaterData) buildHistoricalWetlands(rawWaterData, 1920);
+      if (rawWaterData) buildHistoricalWetlands(rawWaterData, 1930);
 
       if (animateCam) {
         const ap = nucleoCrecimiento(), cam = camParaPuntoArriba(ap.x, ap.z, new THREE.Vector3(-121.6, 755.4, 745.6), -60, 2.8);
-        transitionCameraTo(cam.pos, cam.target, 2.8, 2400); // 1920: enfocado en el aerodromo de Techo
+        transitionCameraTo(cam.pos, cam.target, 2.8, 2400); // 1930: enfocado en el aerodromo de Techo
       }
     } else if (year === 1950) {
       setEraNota("");
@@ -1291,7 +1291,7 @@
       if (desc) desc.textContent = "1950 · Humedal El Burro (171 ha), La Vaca (181 ha) y Sabana Rural con 530 vacas en pastoreo y senderos veredales.";
       cowsGroup.visible = true;
       historicalWetlandsGroup.visible = true;
-      aeropuertoTechoGroup.visible = true; // el aeropuerto se muestra de 1920 a 1959
+      aeropuertoTechoGroup.visible = true; // el aeropuerto se muestra de 1930 a 1959
       corabastosGroup.visible = false;
       roads1972Group.visible = false;
       avCaliGroup.visible = false;
@@ -1503,7 +1503,7 @@
     });
   });
 
-  const histYears = [1900, 1920, 1950, 1956, 1972, 1988, 1995, 2024];
+  const histYears = [1900, 1930, 1950, 1956, 1972, 1988, 1995, 2024];
   const histSlider = document.getElementById("histYearSlider");
   // Pinta el avance del deslizador y resalta la marca de la época activa.
   function pintarTimeline(year) {
@@ -1704,7 +1704,7 @@
   //  - avenidas: las vias de clase "major" (avenidas principales, glorietas) aparecen en los anos 90.
   const ERA_REGLAS = {
     1900: { f: 0, unPiso: true, avenidas: false, humedal: true },
-    1920: { f: 0, unPiso: true, avenidas: false, humedal: true },
+    1930: { f: 0, unPiso: true, avenidas: false, humedal: true },
     1950: { f: 0, unPiso: true, avenidas: false, humedal: true },
     1956: { f: 0, unPiso: true, avenidas: false, humedal: true },
     1972: { f: 0.25, unPiso: true, avenidas: false, humedal: true },
