@@ -298,19 +298,19 @@
   const waterTex = waterTexLoader.load("./assets/textura_agua_clara.jpg");
   waterTex.wrapS = THREE.RepeatWrapping;
   waterTex.wrapT = THREE.RepeatWrapping;
-  waterTex.repeat.set(0.9, 0.9); // escala chica: ondas finas (una repeticion cada ~14 unidades)
+  waterTex.repeat.set(1.8, 1.8); // escala chica: ondas finas y textura más menuda
   waterTex.anisotropy = 4;
   waterTexRef = waterTex;
 
   const bumpTex = waterTexLoader.load("./assets/textura_agua_clara_relieve.jpg");
   bumpTex.wrapS = THREE.RepeatWrapping;
   bumpTex.wrapT = THREE.RepeatWrapping;
-  bumpTex.repeat.set(1.6, 1.6);
+  bumpTex.repeat.set(3.2, 3.2);
   waterBumpRef = bumpTex;
 
   const sharedWaterMat = new THREE.MeshStandardMaterial({
     vertexColors: false, // sin degradado: el agua se ve por su textura
-    color: 0xe2eef2, // agua muy clara: la textura ya trae el color, el material solo la afloja un poco
+    color: 0xc7d8de, // agua un poquito más oscura (la textura ya trae el color, el material solo la afloja un poco)
     map: waterTex,
     bumpMap: bumpTex,
     bumpScale: 0.05,
@@ -332,8 +332,8 @@
   const cowInstances = [];
   // Vacas alrededor de cada humedal: siempre por FUERA del agua, sobre el pasto, con una holgura para que al caminar no entren.
   const COW_FRACTION = { 1930: 1, 1950: 1, 1956: 1 }; // vacas solo en 1930, 1950 y 1956; desde 1972 ya no hay
-  const COW_TOTALS = { Burro: 92, Vaca: 108, Techo: 64 };
-  const COW_SCALE = 2.65; // chicas, pero todavia visibles a la distancia de la vista axonometrica
+  const COW_TOTALS = { Burro: 150, Vaca: 170, Techo: 110 };
+  const COW_SCALE = 1.6; // más chicas que antes, todavía visibles a la distancia de la vista axonométrica
   const COW_MARGEN = 6;  // distancia minima al agua (unidades de escena)
   let lastOutlines = [];
   function createCows() { cowsGroup.clear(); cowInstances.length = 0; } // se colocan al construir los humedales
@@ -362,7 +362,10 @@
     const f = COW_FRACTION[year];
     if (!f) return;
     const polys = outlines.map(o => o.pts), rnd = mulberry32(7000 + year);
-    outlines.forEach(o => {
+    // Las vacas pastan alrededor de El Burro, La Vaca y Techo; los demás cuerpos
+    // (ríos, canales, lagunas) solo sirven para no poner vacas dentro del agua.
+    const principales = outlines.filter(o => o.nombre.includes("Burro") || o.nombre.includes("Vaca") || o.nombre.includes("Techo"));
+    principales.forEach(o => {
       const key = o.nombre.includes("Burro") ? "Burro" : (o.nombre.includes("Vaca") ? "Vaca" : "Techo");
       const n = Math.round(COW_TOTALS[key] * f), pts = o.pts;
       let cx = 0, cz = 0;
@@ -467,6 +470,8 @@
     avesGroup.clear(); aveInstances.length = 0;
     const f = AVE_FRACTION[year >= 2024 ? 2024 : year];
     if (!f || !outlines.length) return;
+    // En 1930/1950/1956 las vacas son más chicas: las aves se achican en la misma proporción para seguir viéndose como la mitad de una vaca. Los demás años no se tocan.
+    const escA = (year === 1930 || year === 1950 || year === 1956) ? 1.0 : AVE_ESCALA;
     const rnd = mulberry32(9100 + year);
     outlines.forEach(o => {
       const key = o.nombre.includes("Burro") ? "Burro" : (o.nombre.includes("Vaca") ? "Vaca" : "Techo"), base = AVE_BASE[key], pts = o.pts;
@@ -486,8 +491,8 @@
           }
           if (!mejor) continue;
           const mat = new THREE.MeshBasicMaterial({ map: texAve(T.img), transparent: true, alphaTest: 0.3, side: THREE.DoubleSide, depthWrite: false });
-          const mesh = new THREE.Mesh(new THREE.PlaneGeometry(T.ancho * AVE_ESCALA, T.alto * AVE_ESCALA), mat);
-          mesh.position.set(mejor.x, T.alto * AVE_ESCALA * 0.5, mejor.z); mesh.rotation.x = -Math.PI / 4.2; mesh.renderOrder = 31;
+          const mesh = new THREE.Mesh(new THREE.PlaneGeometry(T.ancho * escA, T.alto * escA), mat);
+          mesh.position.set(mejor.x, T.alto * escA * 0.5, mejor.z); mesh.rotation.x = -Math.PI / 4.2; mesh.renderOrder = 31;
           avesGroup.add(mesh);
           aveInstances.push({ mesh, tipo, pts, th: rnd() * Math.PI * 2, vel: T.vel * (0.7 + rnd() * 0.6), margen: T.margen, giro: T.giro, pPausa: T.pausa, pausa: 0, flip: 1 });
         }
@@ -516,7 +521,8 @@
     historicalWetlandsGroup.clear();
     const positions = [], uvs = [], colors = [], linePositions = [];
     const UV_SCALE = 0.08;
-    const wetlandOutlines = []; // contornos del agua de esta epoca, para ubicar las vacas alrededor
+    const wetlandOutlines = []; // contornos de El Burro, La Vaca y Techo: para ubicar vacas, árboles y aves
+    const todosLosContornos = []; // TODOS los cuerpos de agua: para que vacas, edificios y vías eviten también ríos y canales
 
     function polyArea(pts) {
       let a = 0;
@@ -567,8 +573,9 @@
 
     waterBodies.forEach((w) => {
       const name = w.nombre || "";
-      if (!name.includes("Burro") && !name.includes("Vaca") && !name.includes("Techo")) return;
       if (!w.pts || w.pts.length < 3) return;
+      // Se muestran TODOS los cuerpos de agua (ríos, canales, lagunas, pondajes):
+      // El Burro, La Vaca y Techo se dimensionan según la época; los demás se ven en su tamaño real.
 
       const ptsOriginal = w.pts;
       const baseArea = polyArea(ptsOriginal);
@@ -582,7 +589,11 @@
       let expandedPts = [];
       let yLayer = 0.024;
 
-      if (name.includes("Burro")) {
+      const esPrincipal = name.includes("Burro") || name.includes("Vaca") || name.includes("Techo");
+      if (!esPrincipal) {
+        // Ríos, canales, lagunas, quebradas y pondajes: tal cual son, en su posición y tamaño reales.
+        expandedPts = chaikinSmooth(ptsOriginal.map(p => [p[0], p[1]]), 1);
+      } else if (name.includes("Burro")) {
         yLayer = 0.024;
         const scale = Math.sqrt(targetAreaBurro / baseArea);
         const unscaled = ptsOriginal.map(p => [cx + (p[0] - cx) * scale, cy + (p[1] - cy) * scale]);
@@ -594,30 +605,12 @@
         expandedPts = smoothed.map(p => [scx + (p[0] - scx) * k, scy + (p[1] - scy) * k]);
       } else if (name.includes("Vaca")) {
         yLayer = 0.025;
-        // En 1972 se mantiene la posición real de cada sector de La Vaca:
-        // el sector principal queda junto a Corabastos y el sector norte no se
-        // desplaza artificialmente hacia El Burro. El segundo sector recibe
-        // una ampliación proporcional para que se entienda el antiguo ámbito.
+        // La Vaca conserva su forma y posición reales: solo se escala al área de la época,
+        // sin desplazarla hacia El Burro. El sector norte (el más chico) mantiene su ámbito.
         const esSectorNorte = baseArea < 20000;
-        const areaObjetivo = year === 1972 ? (esSectorNorte ? 220000 : targetAreaVaca) : targetAreaVaca;
+        const areaObjetivo = (year === 1972 && esSectorNorte) ? 220000 : targetAreaVaca;
         const scaleBase = Math.sqrt(areaObjetivo / baseArea);
-        let transformed;
-        if (year === 1972) {
-          transformed = ptsOriginal.map(p => [cx + (p[0] - cx) * scaleBase, cy + (p[1] - cy) * scaleBase]);
-        } else {
-          const dx = burroCx - cx, dy = burroCy - cy;
-          const dist = Math.hypot(dx, dy) || 1;
-          const ux = dx / dist, uy = dy / dist;
-          transformed = ptsOriginal.map(p => {
-            const px = p[0] - cx, py = p[1] - cy;
-            const proj = px * ux + py * uy;
-            const perp_x = px - proj * ux, perp_y = py - proj * uy;
-            const newProj = proj * (scaleBase * 1.30) + dist * 0.25;
-            const newPerpX = perp_x * (scaleBase * 0.769);
-            const newPerpY = perp_y * (scaleBase * 0.769);
-            return [cx + newProj * ux + newPerpX, cy + newProj * uy + newPerpY];
-          });
-        }
+        const transformed = ptsOriginal.map(p => [cx + (p[0] - cx) * scaleBase, cy + (p[1] - cy) * scaleBase]);
         const smoothed = chaikinSmooth(transformed, 2);
         const sArea = polyArea(smoothed);
         const k = Math.sqrt(areaObjetivo / (sArea || 1));
@@ -626,21 +619,9 @@
         expandedPts = smoothed.map(p => [scx + (p[0] - scx) * k, scy + (p[1] - scy) * k]);
       } else if (name.includes("Techo")) {
         yLayer = 0.026;
+        // Techo también conserva su posición real: solo se escala al área de la época.
         const scaleBase = Math.sqrt(targetAreaTecho / baseArea);
-        const dx = burroCx - cx, dy = burroCy - cy;
-        const dist = Math.hypot(dx, dy) || 1;
-        const ux = dx / dist, uy = dy / dist;
-
-        const transformed = ptsOriginal.map(p => {
-          const px = p[0] - cx, py = p[1] - cy;
-          const proj = px * ux + py * uy;
-          const perp_x = px - proj * ux, perp_y = py - proj * uy;
-          const newProj = proj * (scaleBase * 1.22) + dist * 0.20;
-          const newPerpX = perp_x * (scaleBase * 0.82);
-          const newPerpY = perp_y * (scaleBase * 0.82);
-          return [cx + newProj * ux + newPerpX, cy + newProj * uy + newPerpY];
-        });
-
+        const transformed = ptsOriginal.map(p => [cx + (p[0] - cx) * scaleBase, cy + (p[1] - cy) * scaleBase]);
         const smoothed = chaikinSmooth(transformed, 1);
         const sArea = polyArea(smoothed);
         const k = Math.sqrt(targetAreaTecho / (sArea || 1));
@@ -665,7 +646,8 @@
       }
       piezas.forEach(({ outer: scenePts, holes }) => {
       if (scenePts.length < 3) return;
-      wetlandOutlines.push({ nombre: name, pts: scenePts });
+      todosLosContornos.push({ nombre: name, pts: scenePts });
+      if (esPrincipal) wetlandOutlines.push({ nombre: name, pts: scenePts });
 
       const pts2d = scenePts.map(p => new THREE.Vector2(p.x, p.z));
       const holes2d = holes.map(h => h.map(p => new THREE.Vector2(p.x, p.z)));
@@ -735,7 +717,7 @@
       lineMesh.renderOrder = 20;
       historicalWetlandsGroup.add(lineMesh);
     }
-    colocarVacas(wetlandOutlines, year);
+    colocarVacas(todosLosContornos.length ? todosLosContornos : wetlandOutlines, year);
     colocarArbolesHistoricos(wetlandOutlines, year);
     colocarAves(wetlandOutlines, year);
     aplicarCrecimiento(); // edificios y vias segun las reglas de la epoca y el agua de la epoca
@@ -1115,7 +1097,7 @@
     } else if (year === 1950) {
       setEraNota("");
       if (badge) badge.textContent = "1950 · Sabana Rural";
-      if (desc) desc.textContent = "1950 · Humedal El Burro (171 ha), La Vaca (181 ha) y Sabana Rural con 210 vacas en pastoreo y senderos veredales.";
+      if (desc) desc.textContent = "1950 · Humedal El Burro (171 ha), La Vaca (181 ha) y Sabana Rural con 430 vacas en pastoreo y senderos veredales.";
       cowsGroup.visible = true;
       historicalWetlandsGroup.visible = true;
       aeropuertoTechoGroup.visible = true; // el aeropuerto funciona de 1930 a 1959
