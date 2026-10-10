@@ -365,7 +365,23 @@
     }
     return d;
   }
-  function puntoLibreDeAgua(x, z, polys, margen) { return !polys.some(poly => pointInPoly(x, z, poly) || distToPoly(x, z, poly) < margen); }
+  function puntoLibreDeAgua(x, z, polys, margen, cajas) {
+    for (let i = 0; i < polys.length; i++) {
+      const c = cajas ? cajas[i] : null;
+      if (c && (x < c[0] - margen || x > c[2] + margen || z < c[1] - margen || z > c[3] + margen)) continue; // fuera del recuadro: no se revisa el polígono
+      const poly = polys[i];
+      if (pointInPoly(x, z, poly) || distToPoly(x, z, poly) < margen) return false;
+    }
+    return true;
+  }
+  // Recuadros por polígono (se calculan una vez por época): aceleran la ubicación de vacas y árboles.
+  function cajasDe(polys) {
+    return polys.map(poly => {
+      let a = 1e9, b = 1e9, c = -1e9, d = -1e9;
+      for (let i = 0; i < poly.length; i++) { const p = poly[i]; if (p.x < a) a = p.x; if (p.z < b) b = p.z; if (p.x > c) c = p.x; if (p.z > d) d = p.z; }
+      return [a, b, c, d];
+    });
+  }
   function mulberry32(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
   function colocarVacas(outlines, year) {
     createCows();
@@ -373,6 +389,7 @@
     const f = COW_FRACTION[year];
     if (!f) return;
     const polys = outlines.map(o => o.pts), rnd = mulberry32(7000 + year);
+    const cajasAgua = cajasDe(polys);
     // Las vacas pastan alrededor de El Burro, La Vaca y Techo; los demás cuerpos
     // (ríos, canales, lagunas) solo sirven para no poner vacas dentro del agua.
     const principales = outlines.filter(o => o.nombre.includes("Burro") || o.nombre.includes("Vaca") || o.nombre.includes("Techo"));
@@ -389,7 +406,7 @@
         let x, z, tries = 0, r = 7 + rnd() * 30, libre = false;
         do {
           x = p.x + dx * r + (rnd() - 0.5) * 8; z = p.z + dz * r + (rnd() - 0.5) * 8; tries++;
-          libre = puntoLibreDeAgua(x, z, polys, COW_MARGEN) && !isPointInRunway(x, z);
+          libre = puntoLibreDeAgua(x, z, polys, COW_MARGEN, cajasAgua) && !isPointInRunway(x, z);
           if (!libre) r += 6;
         } while (!libre && tries < 14);
         if (!libre) continue; // si no hay un lugar seco, esa vaca no se pone (nunca queda dentro del agua)
@@ -446,10 +463,11 @@
     histTreesGroup.clear();
     if (!TREE_YEARS[year]) return;
     const polys = outlines.map(o => o.pts), rnd = mulberry32(1900 + year), items = [];
+    const cajasAgua = cajasDe(polys);
     // En 1900 hay más árboles: se amplían franjas, bosquetes y cortinas.
     const boostArboles = (year === 1900) ? 1.7 : 1;
     const gauss = () => Math.sqrt(-2 * Math.log(rnd() + 1e-9)) * Math.cos(2 * Math.PI * rnd());
-    const ok = (x, z, m) => puntoLibreDeAgua(x, z, polys, m) && !isPointInRunway(x, z);
+    const ok = (x, z, m) => puntoLibreDeAgua(x, z, polys, m, cajasAgua) && !isPointInRunway(x, z);
     const centro = o => { let cx = 0, cz = 0; o.pts.forEach(q => { cx += q.x; cz += q.z; }); return { x: cx / o.pts.length, z: cz / o.pts.length }; };
     // 1) franjas de ribera: densas junto al borde del agua y cada vez mas ralas hacia afuera
     outlines.forEach(o => {
@@ -474,6 +492,16 @@
       let dx = p.x - c.x, dz = p.z - c.z; const L = Math.hypot(dx, dz) || 1; dx /= L; dz /= L;
       const d = 25 + rnd() * 70, sx = p.x + dx * d, sz = p.z + dz * d, ang = 0.35 + (rnd() - 0.5) * 0.12, len = 25 + Math.floor(rnd() * 35);
       for (let k = 0; k < len; k++) { const x = sx + Math.cos(ang) * k * 2.6 + (rnd() - 0.5) * 0.8, z = sz + Math.sin(ang) * k * 2.6 + (rnd() - 0.5) * 0.8; if (ok(x, z, 3)) items.push([x, z, 9 + rnd() * 5]); }
+    }
+    // 4) sabana abierta: árboles sueltos por fuera, regados por todo el territorio (no solo junto al agua)
+    {
+      const W = (typeof sceneExtentW !== "undefined" && sceneExtentW) ? sceneExtentW : 700;
+      const H = (typeof sceneExtentH !== "undefined" && sceneExtentH) ? sceneExtentH : 700;
+      const nSabana = Math.round(1900 * boostArboles);
+      for (let s = 0; s < nSabana; s++) {
+        const x = (rnd() - 0.5) * W, z = (rnd() - 0.5) * H;
+        if (ok(x, z, 4)) items.push([x, z, 6 + rnd() * 6]);
+      }
     }
     if (!items.length) return;
     if (!histTreeTex) histTreeTex = new THREE.TextureLoader().load("./assets/arbol_real4.png");
@@ -938,6 +966,7 @@
     const viaTex = new THREE.TextureLoader().load("./assets/textura_via.jpg");
     viaTex.wrapS = THREE.RepeatWrapping;
     viaTex.wrapT = THREE.RepeatWrapping;
+    viaTex.anisotropy = 4;
 
     // A. Pista de Techo (polígono relleno con textura de vía en gris claro)
     const pts2d = AEROPUERTO_RUNWAY_PTS.map(p => new THREE.Vector2(p.x, p.z));
@@ -945,7 +974,7 @@
     try { tris = THREE.ShapeUtils.triangulateShape(pts2d, []); } catch (e) {}
 
     const runwayPos = [], runwayUv = [];
-    const RUNWAY_UV_SCALE = 0.05;
+    const RUNWAY_UV_SCALE = 0.016; // textura grande: se repite poco y no se ven los cuadraditos
     tris.forEach(([ia, ib, ic]) => {
       [ia, ib, ic].forEach(idx => {
         const pt = AEROPUERTO_RUNWAY_PTS[idx];
@@ -1017,7 +1046,7 @@
     [
       [a.x - ax, a.z - az], [a.x + ax, a.z + az], [b.x + ax, b.z + az],
       [a.x - ax, a.z - az], [b.x + ax, b.z + az], [b.x - ax, b.z - az]
-    ].forEach(([px, pz]) => roadUv.push(px * 0.06, pz * 0.06));
+    ].forEach(([px, pz]) => roadUv.push(px * 0.02, pz * 0.02));
 
     const roadGeo = new THREE.BufferGeometry();
     roadGeo.setAttribute("position", new THREE.Float32BufferAttribute(roadPos, 3));
@@ -1035,11 +1064,28 @@
     roadMesh.receiveShadow = true;
     aeropuertoTechoGroup.add(roadMesh);
 
-    // C. Edificio Terminal y torre: en la puntita izquierda del polígono de la pista, hacia arriba.
-    let puntaX = Infinity, puntaZ = 0;
-    AEROPUERTO_RUNWAY_PTS.forEach(p => { if (p.x < puntaX) { puntaX = p.x; puntaZ = p.z; } });
+    // C. Edificio Terminal y torre: DENTRO del polígono de la pista, en su puntita
+    // izquierda, orientado con el eje de la pista.
+    let puntaX = Infinity, puntaZ = 0, ccx = 0, ccz = 0;
+    AEROPUERTO_RUNWAY_PTS.forEach(p => { if (p.x < puntaX) { puntaX = p.x; puntaZ = p.z; } ccx += p.x; ccz += p.z; });
+    ccx /= AEROPUERTO_RUNWAY_PTS.length; ccz /= AEROPUERTO_RUNWAY_PTS.length;
+    const angEje = Math.atan2(ccz - puntaZ, ccx - puntaX);
+    const ux = Math.cos(angEje), uz = Math.sin(angEje); // eje de la pista; perpendicular: (-uz, ux)
+    // Rectángulo orientado del edificio (medio largo 10, medio ancho 4.5): las 4 esquinas + centro dentro.
+    const cabeEdificio = (x, z, hl, hw) => {
+      const pts = [[0, 0], [hl, hw], [hl, -hw], [-hl, hw], [-hl, -hw]];
+      return pts.every(([a, b]) => isPointInRunway(x + ux * a - uz * b, z + uz * a + ux * b));
+    };
+    let termX = puntaX, termZ = puntaZ;
+    for (const m of [[10, 4.5], [8, 4], [6, 3.5]]) {
+      let x = puntaX, z = puntaZ, kk = 0;
+      while (kk < 60 && !cabeEdificio(x, z, m[0], m[1])) { x += ux * 2; z += uz * 2; kk++; }
+      if (cabeEdificio(x, z, m[0], m[1])) { termX = x; termZ = z; break; }
+      termX = x; termZ = z;
+    }
     const group = new THREE.Group();
-    group.position.set(puntaX - 13, 0, puntaZ - 11);
+    group.position.set(termX, 0, termZ);
+    group.rotation.y = -angEje;
 
     const wallMat = new THREE.MeshStandardMaterial({
       color: 0xf4f1ea,
@@ -1096,6 +1142,8 @@
   // 5. Función de cambio de época histórica
   function setHistoricalYear(year, animateCam = true) {
     currentHistoricalYear = year;
+    // Los edificios (36 MB) solo se descargan al entrar a 1972 o más: en 1900–1956 no se muestran.
+    if (year >= 1972 && !currentBuildingMesh && !buildingsLoading) { buildingsLoading = true; loadBuildings(); }
 
     document.querySelectorAll(".year-btn").forEach(btn => {
       const y = parseInt(btn.dataset.year, 10);
@@ -1914,6 +1962,7 @@
     if (info) info.classList.remove("show");
   }
 
+  let buildingsLoading = false; // los 36 MB de edificios solo se descargan una vez, al entrar a 1972+
   function loadBuildings() {
     return fetch(BUILDINGS_URL)
       .then(r => { if (!r.ok) throw new Error("no se pudo cargar " + BUILDINGS_URL); return r.json(); })
@@ -2869,7 +2918,6 @@
       buildAvCaliModel();
       buildProtechoModel();
       loadWaterBodies();
-      loadBuildings();
       loadTrees();
       buildBirds();
       loadParques();

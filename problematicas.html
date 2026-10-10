@@ -61,7 +61,8 @@
     border-color:var(--accent); background:rgba(143,179,163,.25); color:var(--accent); font-weight:700;
     box-shadow:0 0 0 3px rgba(143,179,163,.18), 0 0 14px rgba(143,179,163,.35);
   }
-  /* Línea de tiempo: el deslizador es la estrella */
+  /* Línea de tiempo: todo es el deslizador (los botones de año se conservan ocultos como estado) */
+  .controls-bar .year-btn{ display:none; }
   .timeline-wrap{ flex:1; min-width:200px; display:flex; flex-direction:column; gap:2px; }
   #histYearSlider{
     -webkit-appearance:none; appearance:none; width:100%; height:6px; border-radius:4px; outline:none; cursor:pointer;
