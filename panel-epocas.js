@@ -82,9 +82,9 @@
   // lo que se ve en el mapa en cada epoca del modelo
   const ERAS = {
     1900: { nombre: "Antes de Kennedy", anioTxt: "1900", icono: "fa-water", chips: [
-      { i: "fa-droplet", v: "chuco", t: "«Agua viva» en muisca: laguna y ribera de inundación del río Bogotá, antes de Kennedy" },
+      { i: "fa-droplet", v: "El Tintal", t: "Una sola laguna antes del aeropuerto (en los años 30 se fraccionó en cinco humedales, entre ellos La Vaca)" },
       { i: "fa-cow", v: "≈750", t: "Ganado vacuno en pastoreo sobre las zonas verdes, por fuera del agua" },
-      { i: "fa-tree", t: "Más árboles: franjas de ribera ampliadas y bosquetes" }] },
+      { i: "fa-tree", t: "Más árboles: franjas de ribera ampliadas, bosquetes y sabana abierta" }] },
     1920: { nombre: "Aeropuerto de Techo", anioTxt: "1920", icono: "fa-plane-up", chips: [
       { i: "fa-plane", t: "El aeródromo de Techo empieza a operar (la inauguración oficial es en 1930)" },
       { i: "fa-droplet", v: "171 ha", t: "Sin dato de 1920: se usa el de los años 50 (El Burro: 171 hectáreas, El Tiempo)" },

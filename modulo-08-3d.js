@@ -332,7 +332,7 @@
   const cowInstances = [];
   // Vacas alrededor de cada humedal: siempre por FUERA del agua, sobre el pasto, con una holgura para que al caminar no entren.
   const COW_FRACTION = { 1900: 1.4, 1920: 1, 1950: 1, 1956: 1 }; // vacas en 1900 (más), 1920, 1950 y 1956; desde 1972 ya no hay
-  const COW_TOTALS = { Burro: 150, Vaca: 170, Techo: 110 };
+  const COW_TOTALS = { Burro: 150, Vaca: 170, Techo: 110, Tintal: 430 };
   const COW_SCALE = 1.6; // más chicas que antes, todavía visibles a la distancia de la vista axonométrica
   const COW_MARGEN = 6;  // distancia minima al agua (unidades de escena)
   let lastOutlines = [];
@@ -392,10 +392,12 @@
     const cajasAgua = cajasDe(polys);
     // Las vacas pastan alrededor de El Burro, La Vaca y Techo; los demás cuerpos
     // (ríos, canales, lagunas) solo sirven para no poner vacas dentro del agua.
-    const principales = outlines.filter(o => o.nombre.includes("Burro") || o.nombre.includes("Vaca") || o.nombre.includes("Techo"));
+    const principales = outlines.filter(o => o.nombre.includes("Burro") || o.nombre.includes("Vaca") || o.nombre.includes("Techo") || o.nombre.includes("Tintal"));
+    // Si El Tintal quedó en varias piezas, la cuota se reparte entre ellas.
+    const nTintal = Math.max(1, outlines.filter(o => o.nombre.includes("Tintal")).length);
     principales.forEach(o => {
-      const key = o.nombre.includes("Burro") ? "Burro" : (o.nombre.includes("Vaca") ? "Vaca" : "Techo");
-      const n = Math.round(COW_TOTALS[key] * f), pts = o.pts;
+      const key = o.nombre.includes("Burro") ? "Burro" : (o.nombre.includes("Vaca") ? "Vaca" : (o.nombre.includes("Tintal") ? "Tintal" : "Techo"));
+      const n = Math.round(COW_TOTALS[key] * f / (key === "Tintal" ? nTintal : 1)), pts = o.pts;
       let cx = 0, cz = 0;
       pts.forEach(p => { cx += p.x; cz += p.z; });
       cx /= pts.length; cz /= pts.length;
@@ -459,10 +461,10 @@
   // Arboles de 1950 y 1956: franjas de ribera, bosquetes y cortinas rompevientos (agrupados, no repartidos al azar)
   const TREE_YEARS = { 1900: true, 1920: true, 1950: true, 1956: true };
   let histTreeTex = null;
-  function colocarArbolesHistoricos(outlines, year) {
+  function colocarArbolesHistoricos(outlines, year, avoid) {
     histTreesGroup.clear();
     if (!TREE_YEARS[year]) return;
-    const polys = outlines.map(o => o.pts), rnd = mulberry32(1900 + year), items = [];
+    const polys = (avoid || outlines).map(o => o.pts), rnd = mulberry32(1900 + year), items = [];
     const cajasAgua = cajasDe(polys);
     // En 1900 hay más árboles: se amplían franjas, bosquetes y cortinas.
     const boostArboles = (year === 1900) ? 1.7 : 1;
@@ -519,7 +521,7 @@
   // Aves del humedal: patos, tinguas y garzas chicas que se mueven dentro del agua (cerca de un tercio del tamano de una vaca).
   // Con los anos quedan menos, pero nunca desaparecen: en la actualidad todavia queda al menos una de cada una en cada humedal.
   const AVE_FRACTION = { 1900: 1, 1920: 1, 1950: 1, 1956: 1, 1972: 0.6, 1988: 0.3, 1995: 0.18, 2024: 0.07 };
-  const AVE_BASE = { Burro: { pato: 30, tingua: 18, garza: 8 }, Vaca: { pato: 30, tingua: 16, garza: 8 }, Techo: { pato: 20, tingua: 12, garza: 6 } };
+  const AVE_BASE = { Burro: { pato: 30, tingua: 18, garza: 8 }, Vaca: { pato: 30, tingua: 16, garza: 8 }, Techo: { pato: 20, tingua: 12, garza: 6 }, Tintal: { pato: 80, tingua: 46, garza: 22 } };
   // Con un tercio del tamano de una vaca (1 a 3 px en pantalla) no se distinguian; AVE_ESCALA las deja cerca de la mitad de una vaca.
   const AVE_ESCALA = 1.7;
   const AVE_TIPOS = {
@@ -541,7 +543,7 @@
     const escA = (year <= 1956) ? 1.0 : AVE_ESCALA;
     const rnd = mulberry32(9100 + year);
     outlines.forEach(o => {
-      const key = o.nombre.includes("Burro") ? "Burro" : (o.nombre.includes("Vaca") ? "Vaca" : "Techo"), base = AVE_BASE[key], pts = o.pts;
+      const key = o.nombre.includes("Burro") ? "Burro" : (o.nombre.includes("Vaca") ? "Vaca" : (o.nombre.includes("Tintal") ? "Tintal" : "Techo")), base = AVE_BASE[key], pts = o.pts;
       let x0 = 1e9, z0 = 1e9, x1 = -1e9, z1 = -1e9;
       pts.forEach(p => { x0 = Math.min(x0, p.x); z0 = Math.min(z0, p.z); x1 = Math.max(x1, p.x); z1 = Math.max(z1, p.z); });
       Object.keys(base).forEach(tipo => {
@@ -638,6 +640,102 @@
       burroCy = burroObj.pts.reduce((s, p) => s + p[1], 0) / burroObj.pts.length;
     }
 
+    const tintalAcum = []; // en 1900, El Burro + La Vaca + Techo se funden en la laguna El Tintal
+    // Une anillos (formato [[x,y]...]) en una sola lámina de agua; si quedan
+    // piezas separadas las puentea con bandas hasta formar una sola laguna.
+    function unirTintal(polis) {
+      const anillo = r => { const a = r.map(p => [p[0], p[1]]); a.push(a[0].slice()); return a; };
+      if (!window.polygonClipping || !polis.length) return polis.map(r => r.slice());
+      try {
+        let acc = [anillo(polis[0])];
+        for (let i = 1; i < polis.length; i++) acc = window.polygonClipping.union(acc, [anillo(polis[i])]);
+        let piezas = acc.map(poly => poly[0].slice(0, -1)).filter(r => r.length >= 3);
+        for (let intento = 0; intento < 8 && piezas.length > 1; intento++) {
+          let mejor = null;
+          for (let a = 0; a < piezas.length; a++) for (let b = a + 1; b < piezas.length; b++) {
+            const A = piezas[a], B = piezas[b];
+            for (let i = 0; i < A.length; i += 4) for (let j = 0; j < B.length; j += 4) {
+              const d = (A[i][0] - B[j][0]) * (A[i][0] - B[j][0]) + (A[i][1] - B[j][1]) * (A[i][1] - B[j][1]);
+              if (!mejor || d < mejor.d) mejor = { d, a, b, pa: A[i], pb: B[j] };
+            }
+          }
+          if (!mejor) break;
+          const dx = mejor.pb[0] - mejor.pa[0], dy = mejor.pb[1] - mejor.pa[1], L = Math.hypot(dx, dy) || 1;
+          const nx = -dy / L * 45, ny = dx / L * 45;
+          const banda = [[mejor.pa[0] + nx, mejor.pa[1] + ny], [mejor.pb[0] + nx, mejor.pb[1] + ny], [mejor.pb[0] - nx, mejor.pb[1] - ny], [mejor.pa[0] - nx, mejor.pa[1] - ny]];
+          let u = window.polygonClipping.union([anillo(piezas[mejor.a])], [anillo(piezas[mejor.b])]);
+          u = window.polygonClipping.union(u, [anillo(banda)]);
+          const resto = piezas.filter((_, k) => k !== mejor.a && k !== mejor.b);
+          u.forEach(poly => { if (poly[0].length >= 4) resto.push(poly[0].slice(0, -1)); });
+          piezas = resto;
+        }
+        return piezas.length ? piezas : polis.map(r => r.slice());
+      } catch (e) { console.warn("Unión El Tintal fallida", e); return polis.map(r => r.slice()); }
+    }
+    function emitirCuerpo(name, expandedPts, yLayer, esPrincipal, soloAgua) {
+      const scenePtsFull = expandedPts.map(p => toScene(p[0], p[1]));
+      if (scenePtsFull.length < 3) return;
+
+
+      // En los anos en que esta Corabastos, el agua que cae dentro de su
+      // perimetro se quita: el humedal queda cortado por el muro del predio.
+      let piezas = [{ outer: scenePtsFull, holes: [] }];
+      if (CORABASTOS_ANIOS[year] && window.polygonClipping) {
+        try {
+          const anillo = pts => { const r = pts.map(p => [p.x, p.z]); r.push(r[0].slice()); return r; };
+          const sinCierre = r => r.slice(0, -1).map(q => ({ x: q[0], z: q[1] }));
+          const res = window.polygonClipping.difference([anillo(scenePtsFull)], [anillo(CORABASTOS_PTS)]);
+          piezas = res.filter(poly => poly[0].length >= 4)
+            .map(poly => ({ outer: sinCierre(poly[0]), holes: poly.slice(1).map(sinCierre) }));
+        } catch (e) { console.warn("Recorte de Corabastos fallido", e); }
+      }
+      piezas.forEach(({ outer: scenePts, holes }) => {
+      if (scenePts.length < 3) return;
+      todosLosContornos.push({ nombre: name, pts: scenePts });
+      if (esPrincipal && !soloAgua) wetlandOutlines.push({ nombre: name, pts: scenePts });
+
+      const pts2d = scenePts.map(p => new THREE.Vector2(p.x, p.z));
+      const holes2d = holes.map(h => h.map(p => new THREE.Vector2(p.x, p.z)));
+      const allPts = scenePts.concat(...holes);
+      let tris = [];
+      try { tris = THREE.ShapeUtils.triangulateShape(pts2d, holes2d); } catch (e) {}
+
+      const nPts = scenePts.length;
+      const polyCentroidX = scenePts.reduce((s, p) => s + p.x, 0) / nPts;
+      const polyCentroidZ = scenePts.reduce((s, p) => s + p.z, 0) / nPts;
+      
+      let maxDist = 0.001;
+      for (let i = 0; i < nPts; i++) {
+        const d = Math.hypot(scenePts[i].x - polyCentroidX, scenePts[i].z - polyCentroidZ);
+        if (d > maxDist) maxDist = d;
+      }
+
+      function getWetlandGradientColor(px, pz) {
+        // Sin degradado: el lecho del humedal es de un solo color; el agua se ve por su textura.
+        return [0.78, 0.86, 0.88];
+      }
+
+      // Línea de orilla oscura verdosa
+      [scenePts, ...holes].forEach(ring => {
+        for (let i = 0; i < ring.length; i++) {
+          const p1 = ring[i];
+          const p2 = ring[(i + 1) % ring.length];
+          linePositions.push(p1.x, yLayer + 0.004, p1.z, p2.x, yLayer + 0.004, p2.z);
+        }
+      });
+
+      tris.forEach(([a, b, c]) => {
+        [a, b, c].forEach(idx => {
+          const pt = allPts[idx];
+          positions.push(pt.x, yLayer, pt.z);
+          uvs.push(pt.x * UV_SCALE, pt.z * UV_SCALE);
+          const [cr, cg, cb] = getWetlandGradientColor(pt.x, pt.z);
+          colors.push(cr, cg, cb);
+        });
+      });
+      });
+    } // fin de emitirCuerpo
+
     waterBodies.forEach((w) => {
       const name = w.nombre || "";
       if (!w.pts || w.pts.length < 3) return;
@@ -696,67 +794,19 @@
         const scy = smoothed.reduce((s, p) => s + p[1], 0) / smoothed.length;
         expandedPts = smoothed.map(p => [scx + (p[0] - scx) * k, scy + (p[1] - scy) * k]);
       }
-
-      const scenePtsFull = expandedPts.map(p => toScene(p[0], p[1]));
-      if (scenePtsFull.length < 3) return;
-      // En los anos en que esta Corabastos, el agua que cae dentro de su
-      // perimetro se quita: el humedal queda cortado por el muro del predio.
-      let piezas = [{ outer: scenePtsFull, holes: [] }];
-      if (CORABASTOS_ANIOS[year] && window.polygonClipping) {
-        try {
-          const anillo = pts => { const r = pts.map(p => [p.x, p.z]); r.push(r[0].slice()); return r; };
-          const sinCierre = r => r.slice(0, -1).map(q => ({ x: q[0], z: q[1] }));
-          const res = window.polygonClipping.difference([anillo(scenePtsFull)], [anillo(CORABASTOS_PTS)]);
-          piezas = res.filter(poly => poly[0].length >= 4)
-            .map(poly => ({ outer: sinCierre(poly[0]), holes: poly.slice(1).map(sinCierre) }));
-        } catch (e) { console.warn("Recorte de Corabastos fallido", e); }
-      }
-      piezas.forEach(({ outer: scenePts, holes }) => {
-      if (scenePts.length < 3) return;
-      todosLosContornos.push({ nombre: name, pts: scenePts });
-      if (esPrincipal) wetlandOutlines.push({ nombre: name, pts: scenePts });
-
-      const pts2d = scenePts.map(p => new THREE.Vector2(p.x, p.z));
-      const holes2d = holes.map(h => h.map(p => new THREE.Vector2(p.x, p.z)));
-      const allPts = scenePts.concat(...holes);
-      let tris = [];
-      try { tris = THREE.ShapeUtils.triangulateShape(pts2d, holes2d); } catch (e) {}
-
-      const nPts = scenePts.length;
-      const polyCentroidX = scenePts.reduce((s, p) => s + p.x, 0) / nPts;
-      const polyCentroidZ = scenePts.reduce((s, p) => s + p.z, 0) / nPts;
-      
-      let maxDist = 0.001;
-      for (let i = 0; i < nPts; i++) {
-        const d = Math.hypot(scenePts[i].x - polyCentroidX, scenePts[i].z - polyCentroidZ);
-        if (d > maxDist) maxDist = d;
-      }
-
-      function getWetlandGradientColor(px, pz) {
-        // Sin degradado: el lecho del humedal es de un solo color; el agua se ve por su textura.
-        return [0.78, 0.86, 0.88];
-      }
-
-      // Línea de orilla oscura verdosa
-      [scenePts, ...holes].forEach(ring => {
-        for (let i = 0; i < ring.length; i++) {
-          const p1 = ring[i];
-          const p2 = ring[(i + 1) % ring.length];
-          linePositions.push(p1.x, yLayer + 0.004, p1.z, p2.x, yLayer + 0.004, p2.z);
-        }
-      });
-
-      tris.forEach(([a, b, c]) => {
-        [a, b, c].forEach(idx => {
-          const pt = allPts[idx];
-          positions.push(pt.x, yLayer, pt.z);
-          uvs.push(pt.x * UV_SCALE, pt.z * UV_SCALE);
-          const [cr, cg, cb] = getWetlandGradientColor(pt.x, pt.z);
-          colors.push(cr, cg, cb);
-        });
-      });
-      });
+      if (year === 1900 && esPrincipal) { tintalAcum.push(expandedPts); return; }
+      emitirCuerpo(name, expandedPts, yLayer, esPrincipal, false);
     });
+
+    // 1900: laguna El Tintal única (crónicas: una sola laguna antes del aeropuerto;
+    // en los años 30 el aeropuerto y Las Américas la fraccionaron en cinco humedales).
+    if (year === 1900 && tintalAcum.length) {
+      const piezasT = unirTintal(tintalAcum);
+      let mayor = 0;
+      piezasT.forEach((r, i) => { if (polyArea(r) > polyArea(piezasT[mayor])) mayor = i; });
+      piezasT.forEach((r, i) => emitirCuerpo("Laguna El Tintal", r, 0.024, true, i !== mayor));
+    }
+
 
     const geo = new THREE.BufferGeometry();
     geo.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
@@ -785,7 +835,7 @@
       historicalWetlandsGroup.add(lineMesh);
     }
     colocarVacas(todosLosContornos.length ? todosLosContornos : wetlandOutlines, year);
-    colocarArbolesHistoricos(wetlandOutlines, year);
+    colocarArbolesHistoricos(wetlandOutlines, year, todosLosContornos);
     colocarAves(wetlandOutlines, year);
     aplicarCrecimiento(); // edificios y vias segun las reglas de la epoca y el agua de la epoca
   }
@@ -1198,7 +1248,7 @@
     if (year === 1900) {
       setEraNota("");
       if (badge) badge.textContent = "1900 \u00b7 Antes de Kennedy";
-      if (desc) desc.textContent = "1900 \u00b7 Antes de Kennedy hab\u00eda aqu\u00ed una laguna, ribera de inundaci\u00f3n del r\u00edo Bogot\u00e1. Los muiscas la llamaban chuco: agua viva.";
+      if (desc) desc.textContent = "1900 \u00b7 Antes de Kennedy, la laguna El Tintal cubr\u00eda la zona: una sola l\u00e1mina de agua en la sabana, ribera del r\u00edo Bogot\u00e1. Los muiscas la llamaban chucua, el humedal (Techotiba: territorio de agua).";
       cowsGroup.visible = true;
       historicalWetlandsGroup.visible = true;
       aeropuertoTechoGroup.visible = false;
