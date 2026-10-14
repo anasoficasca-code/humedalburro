@@ -1568,7 +1568,7 @@ window.onerror = function(msg, url, line, col, error) {
   const TREES_LITE_URL = "./assets/lite/trees.json";
   const MAX_DPR = IS_MOBILE ? 1.5 : 2;
   // ?red -> solo la red biotica (para el QR): sin territorio 3D, no descarga sus capas
-  const ONLY_NET = /[?&]red(=|&|$)/i.test(location.search);
+  const ONLY_NET = IS_MOBILE && /[?&]red(=|&|$)/i.test(location.search);   // en computador siempre hay MATERIALIZAR
   if (ONLY_NET) document.body.classList.add("only-net");
   const SCALE = 1 / 10;
 
@@ -3531,8 +3531,25 @@ window.onerror = function(msg, url, line, col, error) {
     }
   });
 
-  // Pointerdown para Clic en Baliza de Territorio
+  // ---- Toque deliberado: solo cuenta si el dedo/mouse casi no se movio (no al girar o hacer zoom) ----
+  const tapState = { x: 0, y: 0, t: 0, multi: false };
+  const activePointers = new Set();
   window.addEventListener("pointerdown", (e) => {
+    activePointers.add(e.pointerId);
+    if (activePointers.size === 1) { tapState.x = e.clientX; tapState.y = e.clientY; tapState.t = Date.now(); tapState.multi = false; }
+    else tapState.multi = true;
+  }, true);
+  const releasePointer = (e) => activePointers.delete(e.pointerId);
+  window.addEventListener("pointerup", releasePointer, true);
+  window.addEventListener("pointercancel", (e) => { releasePointer(e); tapState.multi = true; }, true);
+  function isDeliberateTap(e) {
+    const tol = e.pointerType === "touch" ? 9 : 5;
+    return !tapState.multi && Math.hypot(e.clientX - tapState.x, e.clientY - tapState.y) <= tol && (Date.now() - tapState.t) < 550;
+  }
+
+  // Pointerdown para Clic en Baliza de Territorio
+  window.addEventListener("pointerup", (e) => {
+    if (!isDeliberateTap(e)) return;
     if (e.target.closest(".glass-panel") || e.target.closest("#territorySpeciesModal") || e.target.closest(".welcome-modal") || e.target.closest(".bottom-experience-bar") || e.target.closest(".waypoints-bar") || e.target.closest("#activeTreeChip")) return;
 
     if (currentMorph > 0.35) {
@@ -3924,8 +3941,11 @@ window.onerror = function(msg, url, line, col, error) {
   }
 
   window.closeInspector = () => {
+    const wasOpen = nodeInspector && nodeInspector.style.display !== "none";
     selectedNode = null;
     if (nodeInspector) nodeInspector.style.display = "none";
+    // Al salir de una especie se vuelve a la red completa (vista general, sin zoom)
+    if (wasOpen && currentMorph < 0.35 && window.resetCamera) window.resetCamera();
   };
 
   function focusNode(n) {
@@ -3980,7 +4000,7 @@ window.onerror = function(msg, url, line, col, error) {
 
   // Demostración para el video: el primer clic en cualquier nodo muestra el búho sabanero
   // y a los 2,6 s abre automáticamente su sub-red de interrelaciones.
-  let owlDemoPending = true;
+  let owlDemoPending = false;   // demo del búho desactivada
   function handleNodeClick(nodeObj) {
     if (owlDemoPending) {
       owlDemoPending = false;
@@ -4634,7 +4654,8 @@ window.onerror = function(msg, url, line, col, error) {
 
   // Detección de doble clic para ocultar nodo en Red 3D
   let clickTime = 0;
-  window.addEventListener("pointerdown", (e) => {
+  window.addEventListener("pointerup", (e) => {
+    if (!isDeliberateTap(e)) return;
     if (e.target.closest(".glass-panel") || e.target.closest("#territorySpeciesModal") || e.target.closest(".welcome-modal") || e.target.closest(".bottom-experience-bar") || e.target.closest(".waypoints-bar") || e.target.closest("#activeTreeChip")) return;
 
     if (currentMorph < 0.35) {
@@ -4648,7 +4669,7 @@ window.onerror = function(msg, url, line, col, error) {
         const nodeObj = rawNodes[sp.userData.id];
         const now = Date.now();
 
-        if (now - clickTime < 320) {
+        if (e.pointerType !== "touch" && now - clickTime < 320) {
           // Doble clic: ocultar nodo
           if (nodeObj) {
             nodeObj.hiddenByUser = true;
