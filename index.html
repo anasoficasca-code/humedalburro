@@ -1568,7 +1568,7 @@ window.onerror = function(msg, url, line, col, error) {
   const TREES_LITE_URL = "./assets/lite/trees.json";
   const MAX_DPR = IS_MOBILE ? 1.5 : 2;
   // ?red -> solo la red biotica (para el QR): sin territorio 3D, no descarga sus capas
-  const ONLY_NET = IS_MOBILE && /[?&]red(=|&|$)/i.test(location.search);   // en computador siempre hay MATERIALIZAR
+  const ONLY_NET = false;   // MATERIALIZAR visible siempre (computador y celular), tambien con ?red
   if (ONLY_NET) document.body.classList.add("only-net");
   const SCALE = 1 / 10;
 
