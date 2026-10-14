@@ -755,6 +755,8 @@ window.onerror = function(msg, url, line, col, error) {
     animation: tlPulse 1s ease-in-out infinite alternate; }
   @keyframes tlPulse { from { opacity: 0.3; transform: scale(0.7); } to { opacity: 1; transform: scale(1.1); } }
   .m-only { display: none !important; }
+  body.only-net .scrub-container, body.only-net .waypoints-bar, body.only-net #camInspectorBox { display: none !important; }
+  body.only-net .chat-widget-btn { bottom: 40px; }
 
   /* =====================================================================
      CELULAR (<= 760px): cabecera en carriles desplazables, paneles como
@@ -864,6 +866,7 @@ window.onerror = function(msg, url, line, col, error) {
     }
     .chat-widget-btn svg { width: 19px; height: 19px; }
     .chat-widget-btn span { display: none; }
+    body.only-net .chat-widget-btn { bottom: calc(var(--bar-h) + 14px + env(safe-area-inset-bottom)); }
     body.m-sheet .chat-widget-btn { opacity: 0; pointer-events: none; transform: scale(0.8); }
     .faq-chat-modal { z-index: 240; }
     .chat-body { max-height: none; flex: 1 1 auto; min-height: 120px; }
@@ -1516,6 +1519,9 @@ window.onerror = function(msg, url, line, col, error) {
   const BUILDINGS_LITE_URL = IS_MOBILE ? "./assets/lite/buildings_m.json" : "./assets/lite/buildings.json";
   const TREES_LITE_URL = "./assets/lite/trees.json";
   const MAX_DPR = IS_MOBILE ? 1.5 : 2;
+  // ?red -> solo la red biotica (para el QR): sin territorio 3D, no descarga sus capas
+  const ONLY_NET = /[?&]red(=|&|$)/i.test(location.search);
+  if (ONLY_NET) document.body.classList.add("only-net");
   const SCALE = 1 / 10;
 
   // Estado Global de Transición
@@ -2850,6 +2856,7 @@ window.onerror = function(msg, url, line, col, error) {
   // En computador se precargan en segundo plano; en celular al pulsar MATERIALIZAR / mover el slider.
   let territoryPromise = null;
   function ensureTerritory() {
+    if (ONLY_NET) return Promise.resolve();
     if (territoryPromise) return territoryPromise;
     const loadingTip = document.getElementById("territoryLoadingTip");
     if (loadingTip) loadingTip.classList.add("show");
@@ -4623,6 +4630,7 @@ window.onerror = function(msg, url, line, col, error) {
   const labelTerritory = document.getElementById("labelTerritory");
 
   function animateToStage(target) {
+    if (ONLY_NET && target > 0) return;
     if (target > 0) ensureTerritory();
     targetMorph = target;
     isTerritory = target > 0.5;
