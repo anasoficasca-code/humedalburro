@@ -936,6 +936,45 @@ window.onerror = function(msg, url, line, col, error) {
     .scrub-label { display: none; }
     .scrub-container { padding-left: 18px; gap: 12px; }
   }
+
+  /* ---- Celular v2: red a pantalla completa, controles dentro de "Menú" ---- */
+  .m-menu-sheet { display: none; }
+  @media (max-width: 760px) {
+    .top-header { flex-direction: row; align-items: center; justify-content: space-between; gap: 8px; padding: 0 10px; }
+    .top-header > .brand-title { margin: 0; font-size: 9.5px; padding: 8px 11px; max-width: calc(100vw - 130px); min-width: 0; }
+    .top-header > .brand-title span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; }
+    .top-header > .nav-group { display: none; }
+    .m-menu-btn { order: 2; pointer-events: auto; align-items: center; gap: 7px; height: 38px; padding: 0 14px; border-radius: 999px;
+      background: #0a0d13; color: #e2e8f0; font: 700 12px/1 inherit; border: 1px solid rgba(255,255,255,0.16); cursor: pointer; }
+    .m-menu-btn i { font-size: 14px; color: #84A48B; }
+    body.m-menu-open .m-menu-btn { border-color: #84A48B; color: #84A48B; }
+
+    .m-menu-sheet.open {
+      display: flex; flex-direction: column; gap: 10px;
+      position: fixed; left: 8px; right: 8px; z-index: 270;
+      top: calc(var(--hdr-h) + max(14px, env(safe-area-inset-top)));
+      max-height: calc(100dvh - var(--hdr-h) - var(--bar-h) - 40px); overflow-y: auto;
+      padding: 14px; border-radius: 16px; background: rgba(6, 9, 15, 0.97);
+      animation: fadeIn 0.22s ease-out; overscroll-behavior: contain;
+    }
+    .m-menu-head { display: flex; align-items: center; justify-content: space-between; font-size: 11px; font-weight: 800;
+      letter-spacing: 1px; text-transform: uppercase; color: #84A48B; }
+    .m-menu-sec { font-size: 10px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; color: #64748b; margin-top: 4px; }
+    .m-menu-sheet .nav-group { display: flex; flex-wrap: wrap; overflow: visible; padding: 0; gap: 7px;
+      -webkit-mask-image: none; mask-image: none; }
+    .m-menu-sheet .nav-group::after { display: none; }
+    .m-menu-sheet .nav-group > * { flex: 1 1 auto; justify-content: center; }
+    .m-menu-sheet .btn-flat { min-height: 40px; font-size: 12.5px; background: #0d1117; }
+    .m-menu-sheet .btn-flat.active { background: linear-gradient(rgba(132,164,139,0.2), rgba(132,164,139,0.2)), #0d1117; border-color: #84A48B; }
+    .m-menu-sheet #btnConclusiones { background: linear-gradient(rgba(231,200,120,0.16), rgba(231,200,120,0.16)), #0d1117 !important; }
+    .m-menu-sheet .search-box, .m-menu-sheet .search-box:focus { flex: 1 1 100%; width: 100%; min-height: 42px; background: #0d1117; }
+
+    /* Sin texto de estado sobre la red */
+    .status-badge-text { display: none; }
+    body.only-net .bottom-experience-bar { display: none; }
+    body.only-net .chat-widget-btn { bottom: calc(16px + env(safe-area-inset-bottom)); }
+    body.only-net .side-drawer, body.only-net .gephi-panel, body.only-net .faq-chat-modal { bottom: calc(12px + env(safe-area-inset-bottom)); }
+  }
 </style>
 
 <!-- Three.js, OrbitControls, GSAP -->
@@ -953,6 +992,12 @@ window.onerror = function(msg, url, line, col, error) {
   <div class="veil-bar"><div class="veil-bar-fill"></div></div>
 </div>
 
+<div class="glass-panel m-menu-sheet" id="mobileMenu">
+  <div class="m-menu-head"><span>Explorar la red</span><button class="btn-close" onclick="toggleMobileMenu()" aria-label="Cerrar">×</button></div>
+  <div class="m-slot" id="mSlot1"></div>
+  <div class="m-menu-sec">Distribución y vista</div>
+  <div class="m-slot" id="mSlot2"></div>
+</div>
 <div class="territory-loading" id="territoryLoadingTip"><span class="tl-dot"></span>Cargando territorio 3D…</div>
 <div class="toast-notify" id="toastNotify">Nodo ocultado por doble clic</div>
 
@@ -1011,6 +1056,9 @@ window.onerror = function(msg, url, line, col, error) {
 
 <!-- Top Navigation Header -->
 <div class="top-header" id="topHeader">
+  <button class="glass-panel m-only m-menu-btn" id="btnMobileMenu" onclick="toggleMobileMenu()" aria-label="Menú">
+    <i class="fa-solid fa-bars"></i><span>Menú</span>
+  </button>
   <div class="nav-group">
     <div class="glass-panel brand-title">
       <span>RED DE INTERACCIONES BIÓTICAS DE KENNEDY</span>
@@ -4900,7 +4948,7 @@ window.onerror = function(msg, url, line, col, error) {
     if (!mq.matches) { document.body.classList.remove('m-sheet'); return; }
     var open = (drawer && !drawer.classList.contains('collapsed')) ||
                (gephi && gephi.classList.contains('m-open') && shown(gephi)) ||
-               shown(inspector) || shown(chat);
+               shown(inspector) || shown(chat) || (menu && menu.classList.contains('open'));
     document.body.classList.toggle('m-sheet', !!open);
     if (btnSide) btnSide.classList.toggle('active', drawer && !drawer.classList.contains('collapsed'));
     if (btnGephi) btnGephi.classList.toggle('active', gephi && gephi.classList.contains('m-open'));
@@ -4911,6 +4959,7 @@ window.onerror = function(msg, url, line, col, error) {
     if (keep !== 'gephi' && gephi) gephi.classList.remove('m-open');
     if (keep !== 'inspector' && shown(inspector) && window.closeInspector) window.closeInspector();
     if (keep !== 'chat' && shown(chat) && window.toggleFaqChat) window.toggleFaqChat();
+    if (keep !== 'menu' && menu && menu.classList.contains('open')) { menu.classList.remove('open'); document.body.classList.remove('m-menu-open'); }
   }
 
   var origToggleSide = window.toggleSideDrawer;
@@ -4927,12 +4976,33 @@ window.onerror = function(msg, url, line, col, error) {
     syncSheets();
   };
 
+  var menu = document.getElementById('mobileMenu');
+  var slot1 = document.getElementById('mSlot1'), slot2 = document.getElementById('mSlot2');
+  var groups = hdr.querySelectorAll('.nav-group');
+  window.toggleMobileMenu = function (force) {
+    if (!menu) return;
+    var open = typeof force === 'boolean' ? force : !menu.classList.contains('open');
+    menu.classList.toggle('open', open);
+    document.body.classList.toggle('m-menu-open', open);
+    if (open) closeOthers('menu');
+    syncSheets();
+  };
+  if (menu) menu.addEventListener('click', function (e) {
+    var b = e.target.closest('button');
+    if (b && !b.classList.contains('btn-close')) setTimeout(function () { window.toggleMobileMenu(false); }, 120);
+  });
+
   var wasMobile = null;
   function apply() {
     var m = mq.matches;
+    if (groups.length === 2 && slot1 && slot2) {
+      if (m && groups[0].parentElement !== slot1) { slot1.appendChild(groups[0]); slot2.appendChild(groups[1]); }
+      if (!m && groups[0].parentElement !== hdr) { hdr.appendChild(groups[0]); hdr.appendChild(groups[1]); window.toggleMobileMenu(false); }
+    }
     if (brand) {
       if (m && brand.parentElement !== hdr) hdr.insertBefore(brand, hdr.firstChild);
       if (!m && firstGroup && brand.parentElement !== firstGroup) firstGroup.insertBefore(brand, firstGroup.firstChild);
+      if (m) hdr.insertBefore(brand, hdr.firstChild);
     }
     if (m && wasMobile !== true && drawer) drawer.classList.add('collapsed');   // red limpia al abrir en celular
     if (!m && wasMobile === true) {
