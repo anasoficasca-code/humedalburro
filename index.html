@@ -2,7 +2,9 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<link rel="preload" href="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js" as="script">
 <title>Red de Interacciones Bióticas de Kennedy — Sistema Socioecológico</title>
 
 <!-- Global Error Banner for Robustness -->
@@ -736,6 +738,201 @@ window.onerror = function(msg, url, line, col, error) {
     color: #000; font-family: 'Inter', sans-serif; font-size: 10px; font-weight: 900;
     letter-spacing: 0.12em; text-transform: uppercase; cursor: pointer;
   }
+
+  /* =====================================================================
+     CARGA DIFERIDA DEL TERRITORIO
+     ===================================================================== */
+  .territory-loading {
+    position: fixed; left: 50%; top: 86px; transform: translate(-50%, -6px); z-index: 520;
+    display: flex; align-items: center; gap: 9px; padding: 8px 16px; border-radius: 999px;
+    background: rgba(6, 9, 15, 0.92); border: 1px solid rgba(132, 164, 139, 0.45); color: #cbd5e1;
+    font-size: 11px; font-weight: 700; letter-spacing: 0.04em; pointer-events: none;
+    opacity: 0; transition: opacity 0.3s ease, transform 0.3s ease;
+    -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
+  }
+  .territory-loading.show { opacity: 1; transform: translate(-50%, 0); }
+  .tl-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 10px var(--accent);
+    animation: tlPulse 1s ease-in-out infinite alternate; }
+  @keyframes tlPulse { from { opacity: 0.3; transform: scale(0.7); } to { opacity: 1; transform: scale(1.1); } }
+  .m-only { display: none !important; }
+
+  /* =====================================================================
+     CELULAR (<= 760px): cabecera en carriles desplazables, paneles como
+     hojas inferiores, barra de transicion a todo el ancho.
+     ===================================================================== */
+  @media (max-width: 760px) {
+    :root { --hdr-h: 112px; --bar-h: 70px; --sheet-gap: 10px; }
+    html, body { font-size: 13px; }
+    .m-only { display: flex !important; }
+    .welcome-overlay { height: 100dvh; }
+
+    /* --- Cabecera --- */
+    .top-header {
+      top: max(8px, env(safe-area-inset-top)); left: 0; right: 0;
+      flex-direction: column; align-items: stretch; flex-wrap: nowrap; gap: 6px;
+    }
+    .top-header > .brand-title {
+      align-self: flex-start; margin: 0 10px; pointer-events: auto;
+      font-size: 10px; letter-spacing: 0.6px; padding: 7px 11px; border-radius: 10px;
+      max-width: calc(100vw - 20px); overflow: hidden; text-overflow: ellipsis;
+    }
+    .nav-group {
+      flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; gap: 6px;
+      padding: 0 10px 2px; scroll-padding: 0 10px;
+      -webkit-overflow-scrolling: touch; scrollbar-width: none;
+      -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 10px, #000 calc(100% - 22px), transparent 100%);
+              mask-image: linear-gradient(90deg, transparent 0, #000 10px, #000 calc(100% - 22px), transparent 100%);
+    }
+    .nav-group::-webkit-scrollbar { display: none; }
+    .nav-group > * { flex: 0 0 auto; }
+    .nav-group::after { content: ''; flex: 0 0 14px; }
+    .btn-flat { min-height: 34px; padding: 7px 12px; font-size: 11.5px; border-radius: 10px; }
+    .top-header .glass-panel { box-shadow: 0 8px 22px rgba(0, 0, 0, 0.7); }
+    .top-header .btn-flat { background: #0a0d13; border-color: rgba(255, 255, 255, 0.14); }
+    .top-header .btn-flat.active { background: linear-gradient(rgba(132,164,139,0.2), rgba(132,164,139,0.2)), #0a0d13; border-color: #84A48B; }
+    .top-header #btnConclusiones { background: linear-gradient(rgba(231,200,120,0.16), rgba(231,200,120,0.16)), #0a0d13 !important; }
+    .top-header > .brand-title { background: #0a0d13; }
+    .search-box { background: #0a0d13; }
+    .search-box, .search-box:focus { width: 150px; min-height: 34px; font-size: 16px; padding: 6px 12px; border-radius: 10px; }
+
+    /* --- Hojas inferiores comunes --- */
+    .side-drawer, .gephi-panel, .faq-chat-modal {
+      position: fixed; left: 8px; right: 8px; width: auto; top: auto;
+      bottom: calc(var(--bar-h) + var(--sheet-gap) + env(safe-area-inset-bottom));
+      max-height: min(58dvh, calc(100dvh - var(--hdr-h) - var(--bar-h) - 34px));
+      border-radius: 16px; overscroll-behavior: contain;
+    }
+    .side-drawer { padding: 14px 12px; overflow-y: auto; transition: opacity 0.25s ease, transform 0.25s ease; }
+    .side-drawer.collapsed { transform: translateY(18px); }
+    body.territory-mode .side-drawer { width: auto; padding: 12px 10px; }
+
+    .drawer-header { font-size: 10.5px; padding-bottom: 10px; }
+    .quick-toggle-btn { font-size: 10.5px; padding: 5px 10px; border-radius: 6px; }
+    .cat-card { padding: 9px 12px; margin-bottom: 7px; border-radius: 12px; }
+    .cat-card:hover { transform: none; }
+    .cat-thumb { width: 34px; height: 34px; }
+    .toggle-box { width: 20px; height: 20px; border-radius: 5px; }
+    .toggle-box.checked::after { width: 7px; height: 7px; }
+    .badge-count { font-size: 11px; padding: 3px 8px; }
+    .interaction-chips-grid { gap: 6px; }
+    .inter-chip { padding: 8px 4px; border-radius: 10px; gap: 4px; }
+    .inter-chip-title { font-size: 10px; }
+    .inter-chip-badge { font-size: 10px; }
+    body.territory-mode .side-drawer .inter-chip-title,
+    body.territory-mode .side-drawer .inter-chip-badge { font-size: 9px; }
+
+    /* Panel Gephi: oculto hasta pulsar "Vistas" */
+    .gephi-panel { display: none; padding: 14px; gap: 9px; overflow-y: auto; }
+    .gephi-panel.m-open { display: flex; animation: sheetUp 0.28s cubic-bezier(.22,.9,.3,1); }
+    .gp-title { font-size: 13px; }
+    .gp-title span { font-size: 10.5px; }
+    .gp-sec { font-size: 9.5px; }
+    .gp-grid { gap: 7px; }
+    .gp-btn { padding: 10px 2px 9px; font-size: 10.5px; border-radius: 10px; gap: 6px; }
+    .gp-btn i { font-size: 16px; }
+    .gp-info { font-size: 11.5px; }
+    .gp-leg-row { font-size: 11px; }
+    @keyframes sheetUp { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: none; } }
+
+    /* --- Ficha de especie: hoja inferior a todo el ancho --- */
+    .node-inspector {
+      position: fixed; left: 0; right: 0; bottom: 0; top: auto; width: auto;
+      max-height: 64dvh; z-index: 260; padding: 18px 16px calc(18px + env(safe-area-inset-bottom));
+      border-radius: 20px 20px 0 0; border-left: none; border-top: 3px solid #84A48B;
+      animation: sheetUp 0.3s cubic-bezier(.22,.9,.3,1); overscroll-behavior: contain;
+    }
+    .node-inspector::before {
+      content: ''; display: block; width: 40px; height: 4px; border-radius: 2px;
+      background: rgba(255, 255, 255, 0.22); margin: -8px auto 12px;
+    }
+    .node-title { font-size: 17px; }
+    .node-subtitle { font-size: 12.5px; }
+    .btn-close { padding: 6px 12px; font-size: 16px; }
+    .media-preview { height: 190px; border-radius: 12px; }
+    .metric-val { font-size: 15px; }
+    .metric-lbl { font-size: 10.5px; }
+    .text-content { font-size: 12.5px; line-height: 1.5; }
+    .sec-header { font-size: 11px; }
+    .neighbor-scroll { max-height: 190px; }
+    .neighbor-row { padding: 10px 12px; font-size: 12px; }
+
+    /* --- Asistente: boton redondo y ventana a todo el ancho --- */
+    .chat-widget-btn {
+      right: 12px; bottom: calc(var(--bar-h) + 14px + env(safe-area-inset-bottom));
+      width: 48px; height: 48px; padding: 0; border-radius: 50%; justify-content: center;
+      transition: opacity 0.2s ease, transform 0.2s ease;
+    }
+    .chat-widget-btn svg { width: 19px; height: 19px; }
+    .chat-widget-btn span { display: none; }
+    body.m-sheet .chat-widget-btn { opacity: 0; pointer-events: none; transform: scale(0.8); }
+    .faq-chat-modal { z-index: 240; }
+    .chat-body { max-height: none; flex: 1 1 auto; min-height: 120px; }
+    .msg-bubble { font-size: 12.5px; }
+    .chip-btn { font-size: 11.5px; padding: 9px 12px; }
+    #chatInput { font-size: 16px !important; padding: 9px 12px !important; }
+
+    /* --- Barra inferior de transicion --- */
+    .bottom-experience-bar {
+      left: 8px; right: 8px; transform: none; bottom: calc(8px + env(safe-area-inset-bottom)); gap: 5px;
+    }
+    .scrub-container { width: 100%; gap: 10px; padding: 6px 6px 6px 16px; border-radius: 999px; }
+    .custom-scrub-slider { flex: 1 1 auto; width: auto; min-width: 60px; height: 4px; }
+    .custom-scrub-slider::-webkit-slider-thumb { width: 22px; height: 22px; }
+    .custom-scrub-slider::-moz-range-thumb { width: 22px; height: 22px; border: none; border-radius: 50%; background: var(--accent); }
+    .scrub-label { font-size: 9.5px; letter-spacing: 0.08em; white-space: nowrap; }
+    .experience-toggle-btn { flex: 0 0 auto; padding: 11px 14px; font-size: 10.5px; letter-spacing: 0.1em; white-space: nowrap; }
+    .status-badge-text { text-shadow: 0 1px 3px #000, 0 0 8px #000; font-size: 9px; letter-spacing: 0.04em; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 8px; }
+
+    /* Herramienta de camara (editor) no aplica en celular */
+    #camInspectorBox, #camToast { display: none !important; }
+
+    /* --- Territorio --- */
+    .waypoints-bar {
+      top: calc(var(--hdr-h) + 16px); left: 0; right: 0; transform: none; justify-content: flex-start;
+      overflow-x: auto; padding: 0 10px; gap: 6px; scrollbar-width: none; -webkit-overflow-scrolling: touch;
+    }
+    .waypoints-bar::-webkit-scrollbar { display: none; }
+    .waypoint-pill { flex: 0 0 auto; white-space: nowrap; padding: 9px 14px; font-size: 10px; }
+    #activeTreeChip { top: calc(var(--hdr-h) + 64px); right: 10px; }
+    .toast-notify, .territory-loading { top: calc(var(--hdr-h) + 18px); }
+    .toast-notify { font-size: 12px; max-width: calc(100vw - 24px); text-align: center; }
+    #territorySpeciesModal { width: calc(100vw - 20px) !important; max-height: 78dvh !important; padding: 16px !important; }
+
+    /* --- Modales --- */
+    .welcome-modal { width: calc(100% - 16px); max-height: calc(100dvh - 24px); padding: 18px 16px; gap: 16px; border-radius: 18px; }
+    .welcome-header { flex-direction: column; align-items: stretch; gap: 12px; }
+    .welcome-header > div:first-child > div:first-child { font-size: 14px !important; align-items: flex-start !important; line-height: 1.3; }
+    .welcome-header > div:last-child { flex-wrap: wrap; }
+    .welcome-header > div:last-child > .btn-flat { flex: 1 1 auto; justify-content: center; }
+    .welcome-modal > div:last-child { flex-direction: column; align-items: stretch !important; gap: 12px; }
+    .welcome-modal > div:last-child > .btn-flat { justify-content: center; }
+    .pie-grid { grid-template-columns: minmax(0, 1fr); gap: 14px; }
+    .pie-card { padding: 16px 12px; }
+    .donut-wrap { width: min(240px, 72vw); height: min(240px, 72vw); }
+    .legend-row { font-size: 11.5px; }
+    .lg-name { font-size: 11.5px; }
+    .metric-sources { font-size: 11px; }
+
+    .cc-grid { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+    .cc-card { padding: 16px; }
+    .cc-line { font-size: 12.5px; }
+    .cc-synth { flex-direction: column; align-items: flex-start; padding: 14px; }
+    .cc-synth .cc-act { margin-left: 0; }
+    .concl-card { padding: 18px 16px; gap: 16px; }
+    .concl-title { font-size: 17px; }
+    .concl-text { font-size: 13px; }
+    .cv-bar-row { grid-template-columns: 96px 1fr 50px; gap: 8px; font-size: 10.5px; }
+
+    .subnetwork-modal, .hubs-modal {
+      width: 100vw; max-width: 100vw; height: 100dvh; max-height: 100dvh; border-radius: 0; border-width: 0;
+    }
+    .subnetwork-header { flex-wrap: wrap; gap: 8px; padding-top: max(12px, env(safe-area-inset-top)); }
+  }
+
+  @media (max-width: 420px) {
+    .scrub-label { display: none; }
+    .scrub-container { padding-left: 18px; gap: 12px; }
+  }
 </style>
 
 <!-- Three.js, OrbitControls, GSAP -->
@@ -753,6 +950,7 @@ window.onerror = function(msg, url, line, col, error) {
   <div class="veil-bar"><div class="veil-bar-fill"></div></div>
 </div>
 
+<div class="territory-loading" id="territoryLoadingTip"><span class="tl-dot"></span>Cargando territorio 3D…</div>
 <div class="toast-notify" id="toastNotify">Nodo ocultado por doble clic</div>
 
 <!-- Welcome Modal Overlay: 3 Statistical Pie Charts -->
@@ -856,6 +1054,9 @@ window.onerror = function(msg, url, line, col, error) {
     </button>
 
     <button class="glass-panel btn-flat" onclick="resetCamera()">Reset</button>
+    <button class="glass-panel btn-flat m-only" id="btnGephiMobile" onclick="toggleGephiMobile()">
+      <i class="fa-solid fa-diagram-project"></i><span>Vistas</span>
+    </button>
   </div>
 </div>
 
@@ -890,7 +1091,7 @@ window.onerror = function(msg, url, line, col, error) {
 
   <div class="cat-card" id="catCard0" style="--cat-color:#84A48B;" onclick="toggleCat(0)">
     <div class="cat-label-wrap">
-      <img class="cat-thumb" style="--cat-color:#84A48B;" src="assets/fotos/fotos_flora/Sauco.jpg" onerror="this.src='./assets/inat_sauco.png'" alt="Flora">
+      <img class="cat-thumb" style="--cat-color:#84A48B;" src="./assets/thumbs/fotos/fotos_flora/Sauco.webp" decoding="async" onerror="this.src='./assets/inat_sauco.png'" alt="Flora">
       <div>
         <div style="font-weight:700; color:#f8fafc;">Flora & Arbolado SIGAU</div>
         <div style="font-size:9.5px; color:#94a3b8;">289 Especies Botánicas / Censo SIGAU</div>
@@ -904,7 +1105,7 @@ window.onerror = function(msg, url, line, col, error) {
 
   <div class="cat-card" id="catCard1" style="--cat-color:#38BDF8;" onclick="toggleCat(1)">
     <div class="cat-label-wrap">
-      <img class="cat-thumb" style="--cat-color:#38BDF8;" src="assets/fotos/fotos_aves/Mirla%20patinaranja.jpeg" onerror="this.src='./assets/inat_mirla.png'" alt="Aves">
+      <img class="cat-thumb" style="--cat-color:#38BDF8;" src="./assets/thumbs/fotos/fotos_aves/Mirla%20patinaranja.webp" decoding="async" onerror="this.src='./assets/inat_mirla.png'" alt="Aves">
       <div>
         <div style="font-weight:700; color:#f8fafc;">Aves (Avifauna)</div>
         <div style="font-size:9.5px; color:#94a3b8;">232 Especies Acuáticas & de Dosel</div>
@@ -918,7 +1119,7 @@ window.onerror = function(msg, url, line, col, error) {
 
   <div class="cat-card" id="catCard2" style="--cat-color:#F59E0B;" onclick="toggleCat(2)">
     <div class="cat-label-wrap">
-      <img class="cat-thumb" style="--cat-color:#F59E0B;" src="assets/fotos/fotos_mamiferos/Ardilla%20de%20cola%20roja.jpeg" onerror="this.src='./assets/inat_rata.png'" alt="Mamíferos">
+      <img class="cat-thumb" style="--cat-color:#F59E0B;" src="./assets/thumbs/fotos/fotos_mamiferos/Ardilla%20de%20cola%20roja.webp" decoding="async" onerror="this.src='./assets/inat_rata.png'" alt="Mamíferos">
       <div>
         <div style="font-weight:700; color:#f8fafc;">Mamíferos</div>
         <div style="font-size:9.5px; color:#94a3b8;">15 Especies de Mastofauna</div>
@@ -932,7 +1133,7 @@ window.onerror = function(msg, url, line, col, error) {
 
   <div class="cat-card" id="catCard3" style="--cat-color:#EC4899;" onclick="toggleCat(3)">
     <div class="cat-label-wrap">
-      <img class="cat-thumb" style="--cat-color:#EC4899;" src="assets/fotos/fotos_moluscos/Caracol%20europeo%20de%20jard%C3%ADn.jpg" onerror="this.src='./assets/inat_lenteja.png'" alt="Moluscos">
+      <img class="cat-thumb" style="--cat-color:#EC4899;" src="./assets/thumbs/fotos/fotos_moluscos/Caracol%20europeo%20de%20jard%C3%ADn.webp" decoding="async" onerror="this.src='./assets/inat_lenteja.png'" alt="Moluscos">
       <div>
         <div style="font-weight:700; color:#f8fafc;">Moluscos</div>
         <div style="font-size:9.5px; color:#94a3b8;">14 Especies de Caracoles y Babosas</div>
@@ -946,7 +1147,7 @@ window.onerror = function(msg, url, line, col, error) {
 
   <div class="cat-card" id="catCard4" style="--cat-color:#10B981;" onclick="toggleCat(4)">
     <div class="cat-label-wrap">
-      <img class="cat-thumb" style="--cat-color:#10B981;" src="assets/fotos/fotos_anfibios/Rana%20sabanera.jpg" onerror="this.src='./assets/inat_rana.png'" alt="Anfibios">
+      <img class="cat-thumb" style="--cat-color:#10B981;" src="./assets/thumbs/fotos/fotos_anfibios/Rana%20sabanera.webp" decoding="async" onerror="this.src='./assets/inat_rana.png'" alt="Anfibios">
       <div>
         <div style="font-weight:700; color:#f8fafc;">Anfibios</div>
         <div style="font-size:9.5px; color:#94a3b8;">9 Especies de Ranas y Salamandras</div>
@@ -960,7 +1161,7 @@ window.onerror = function(msg, url, line, col, error) {
 
   <div class="cat-card" id="catCard5" style="--cat-color:#A855F7;" onclick="toggleCat(5)">
     <div class="cat-label-wrap">
-      <img class="cat-thumb" style="--cat-color:#A855F7;" src="assets/fotos/fotos_reptiles/Serpiente%20sabanera.jpg" onerror="this.src='./assets/inat_espino.png'" alt="Reptiles">
+      <img class="cat-thumb" style="--cat-color:#A855F7;" src="./assets/thumbs/fotos/fotos_reptiles/Serpiente%20sabanera.webp" decoding="async" onerror="this.src='./assets/inat_espino.png'" alt="Reptiles">
       <div>
         <div style="font-weight:700; color:#f8fafc;">Reptiles</div>
         <div style="font-size:9.5px; color:#94a3b8;">9 Especies de Serpientes y Lagartos</div>
@@ -1309,6 +1510,12 @@ window.onerror = function(msg, url, line, col, error) {
   const TREES_URL = "./assets/kennedy_trees_real.json";
   const WATER_URL = "./assets/kennedy_water_bodies.json";
   const NET_URL = "./assets/kennedy_net.json";
+  // Versiones compactas (assets/lite, generadas con tools/build_lite_data.py). En celular se usa
+  // una muestra de 1 de cada 4 edificios para que el territorio cargue rapido y no agote la memoria.
+  const IS_MOBILE = window.matchMedia("(max-width: 820px), (pointer: coarse) and (hover: none)").matches;
+  const BUILDINGS_LITE_URL = IS_MOBILE ? "./assets/lite/buildings_m.json" : "./assets/lite/buildings.json";
+  const TREES_LITE_URL = "./assets/lite/trees.json";
+  const MAX_DPR = IS_MOBILE ? 1.5 : 2;
   const SCALE = 1 / 10;
 
   // Estado Global de Transición
@@ -1399,11 +1606,23 @@ window.onerror = function(msg, url, line, col, error) {
     perspective: { pos: new THREE.Vector3(206, 3.8, 50), target: new THREE.Vector3(214, 3.2, 135), fov: 68 }
   };
 
+  // Pantallas verticales (celular): alejar la camara para que la red completa quepa a lo ancho
+  if (aspect < 1) {
+    const fit = Math.min(2.6, Math.max(1, 1.1 / aspect));
+    swarmCamPos.z *= fit;
+    const tf = Math.min(1.8, fit);
+    territoryCamPos.set(
+      territoryTarget.x + (territoryCamPos.x - territoryTarget.x) * tf,
+      territoryTarget.y + (territoryCamPos.y - territoryTarget.y) * tf,
+      territoryTarget.z + (territoryCamPos.z - territoryTarget.z) * tf
+    );
+  }
+
   camera.position.copy(swarmCamPos);
   camera.lookAt(swarmTarget);
 
   const renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, alpha: false, powerPreference: "high-performance" });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, MAX_DPR));
   renderer.setSize(window.innerWidth, window.innerHeight);
 
   const controls = new THREE.OrbitControls(camera, canvas);
@@ -1508,6 +1727,15 @@ window.onerror = function(msg, url, line, col, error) {
   const SPHERE_RADIUS = 34.0;
 
   // Texturas circulares con imagen real iNaturalist / SIGAU y fallback SVG inmediato
+  // Miniaturas livianas para las texturas (128px): WebP locales en assets/thumbs y "small" de iNaturalist.
+  // Si la miniatura falla se usa la foto original.
+  function thumbUrl(u) {
+    if (!u) return u;
+    if (u.indexOf("inaturalist-open-data") >= 0) return u.replace(/\/(medium|large|original)\.(jpe?g|png)$/i, "/small.$2");
+    const m = u.match(/^\.?\/?assets\/(fotos\/.+)\.[a-z0-9]+$/i);
+    return m ? "./assets/thumbs/" + m[1] + ".webp" : u;
+  }
+
   function createCircularTexture(imgUrl, taxonId, speciesName, cat) {
     const cvs = document.createElement("canvas");
     cvs.width = 128; cvs.height = 128;
@@ -1541,7 +1769,9 @@ window.onerror = function(msg, url, line, col, error) {
     if (imgUrl) {
       const img = new Image();
       img.crossOrigin = "Anonymous";
-      img.src = imgUrl;
+      img.decoding = "async";
+      const thumb = thumbUrl(imgUrl);
+      img.src = thumb;
       img.onload = () => {
         try {
           ctx.clearRect(0, 0, 128, 128);
@@ -1562,7 +1792,10 @@ window.onerror = function(msg, url, line, col, error) {
           tex.needsUpdate = true;
         } catch(e) { drawFallback(); }
       };
-      img.onerror = drawFallback;
+      img.onerror = () => {
+        if (thumb !== imgUrl && !img.dataset.orig) { img.dataset.orig = "1"; img.src = imgUrl; }
+        else drawFallback();
+      };
     }
 
     return tex;
@@ -2255,7 +2488,7 @@ window.onerror = function(msg, url, line, col, error) {
     uMorphProgress: { value: 0.0 },
     uPerspectiveMode: { value: 0.0 },
     uTime: { value: 0.0 },
-    uPixelRatio: { value: Math.min(window.devicePixelRatio || 1, 2) },
+    uPixelRatio: { value: Math.min(window.devicePixelRatio || 1, MAX_DPR) },
     uRipplePos: { value: new THREE.Vector3(0, 0, 0) },
     uRippleTime: { value: 99.0 }
   };
@@ -2301,19 +2534,28 @@ window.onerror = function(msg, url, line, col, error) {
     };
   }
 
+  // Los edificios (millones de particulas) se guardan en Float32Array en vez de arreglos JS
+  let bldgBuf = null;
   function rebuildTerritoryParticles() {
     if (particlePoints) {
       sceneRoot.remove(particlePoints);
       particlePoints.geometry.dispose();
     }
 
+    const join = (arr, key) => {
+      const b = bldgBuf ? bldgBuf[key] : null;
+      if (!b) return new Float32Array(arr);
+      const out = new Float32Array(arr.length + b.length);
+      out.set(arr); out.set(b, arr.length);
+      return out;
+    };
     const geo = new THREE.BufferGeometry();
-    geo.setAttribute("position", new THREE.Float32BufferAttribute(pTarget, 3));
-    geo.setAttribute("aSwarmPos", new THREE.Float32BufferAttribute(pSwarm, 3));
-    geo.setAttribute("aColor", new THREE.Float32BufferAttribute(pColor, 3));
-    geo.setAttribute("aSize", new THREE.Float32BufferAttribute(pSize, 1));
-    geo.setAttribute("aPhase", new THREE.Float32BufferAttribute(pPhase, 1));
-    geo.setAttribute("aCategory", new THREE.Float32BufferAttribute(pCat, 1));
+    geo.setAttribute("position", new THREE.BufferAttribute(join(pTarget, "t"), 3));
+    geo.setAttribute("aSwarmPos", new THREE.BufferAttribute(join(pSwarm, "s"), 3));
+    geo.setAttribute("aColor", new THREE.BufferAttribute(join(pColor, "c"), 3));
+    geo.setAttribute("aSize", new THREE.BufferAttribute(join(pSize, "z"), 1));
+    geo.setAttribute("aPhase", new THREE.BufferAttribute(join(pPhase, "p"), 1));
+    geo.setAttribute("aCategory", new THREE.BufferAttribute(join(pCat, "k"), 1));
 
     particlePoints = new THREE.Points(geo, particleMat);
     sceneRoot.add(particlePoints);
@@ -2411,9 +2653,17 @@ window.onerror = function(msg, url, line, col, error) {
   }
 
   function loadTrees() {
-    return fetch(TREES_URL)
+    return fetch(TREES_LITE_URL)
       .then(r => r.json())
-      .then(trees => {
+      .then(d => {
+        // Decodifica el formato compacto [nombre, dx, dy, h*10] -> [x, y, h, nombre]
+        const trees = [];
+        const f = d.d || [];
+        let px = 0, py = 0;
+        for (let k = 0; k < f.length; k += 4) {
+          px += f[k + 1]; py += f[k + 2];
+          trees.push([px / 10, py / 10, f[k + 3] / 10, d.n[f[k]]]);
+        }
         const colTreeLush = new THREE.Color(0x2E8B57);
         const colTreeBright = new THREE.Color(0x48BB78);
         const colTrunk = new THREE.Color(0x161D26);
@@ -2513,85 +2763,109 @@ window.onerror = function(msg, url, line, col, error) {
   }
 
   function loadBuildings() {
-    return fetch(BUILDINGS_URL)
+    return fetch(BUILDINGS_LITE_URL)
       .then(r => r.json())
-      .then(bldgs => {
+      .then(flat => {
         // Tonos bajados para que los edificios no compitan con las especies y sus relaciones
         const colBldgPrimary = new THREE.Color(0xCBD5E1).multiplyScalar(0.42);
         const colBldgSecondary = new THREE.Color(0x94A3B8).multiplyScalar(0.42);
         const colRoofHighlight = new THREE.Color(0x84A48B).multiplyScalar(0.5);
-        const colBaseGround = new THREE.Color(0x06090F);
-        const bldList = Array.isArray(bldgs) ? bldgs : (bldgs.buildings || []);
-
-        bldList.forEach((b, i) => {
-          const pts = b.pts || [];
-          if (pts.length < 3) return;
-
-          const hMeters = b.height || b.h || 12.0;
+        const stepsFor = (hMeters) => {
           const h = Math.max(0.9, hMeters * SCALE * 1.12);
-          const sPts = pts.map(p => toScene(p[0], p[1]));
+          return [h, Math.max(2, Math.floor(h / 1.6))];
+        };
 
-          const bldgCol = (i % 7 === 0) ? colRoofHighlight : ((i % 2 === 0) ? colBldgPrimary : colBldgSecondary);
+        // Pasada 1: contar particulas para reservar memoria exacta
+        let total = 0;
+        for (let k = 0, i = 0; k < flat.length; i++) {
+          const hMeters = flat[k] / 10, np = flat[k + 1];
+          k += 2 + np * 2;
+          if (np < 3) continue;
+          const steps = stepsFor(hMeters)[1];
+          total += np * (steps + 1) + (i % 3 === 0 ? 1 : 0) + (i % 4 === 0 ? 1 : 0);
+        }
 
-          for (let j = 0; j < sPts.length; j++) {
-            const p = sPts[j];
-            const steps = Math.max(2, Math.floor(h / 1.6));
+        const T = new Float32Array(total * 3), S = new Float32Array(total * 3), C = new Float32Array(total * 3);
+        const Z = new Float32Array(total), P = new Float32Array(total), K = new Float32Array(total);
+        const nN = rawNodes.length;
+        let o = 0;
+        const put = (x, y, z, r, g, b, size, phase) => {
+          const node = nN ? rawNodes[currentParticleIndex % nN] : null;
+          currentParticleIndex++;
+          const o3 = o * 3;
+          T[o3] = x; T[o3 + 1] = y; T[o3 + 2] = z;
+          if (node) {
+            S[o3] = node.ox + (Math.random() - 0.5) * 2.0;
+            S[o3 + 1] = node.oy + (Math.random() - 0.5) * 2.0;
+            S[o3 + 2] = node.oz + (Math.random() - 0.5) * 2.0;
+          } else {
+            const sw = randomSwarmCluster(currentParticleIndex);
+            S[o3] = sw.x; S[o3 + 1] = sw.y; S[o3 + 2] = sw.z;
+          }
+          C[o3] = r; C[o3 + 1] = g; C[o3 + 2] = b;
+          Z[o] = size; P[o] = phase; K[o] = 3.0;
+          o++;
+        };
 
-            for (let s = 0; s <= steps; s++) {
-              const y = (s / steps) * h;
-              const sw = randomSwarmCluster(currentParticleIndex++);
-              pTarget.push(p.x, y, p.z);
-              pSwarm.push(sw.x, sw.y, sw.z);
+        // Pasada 2: mismas reglas de construccion que la version original
+        const xs = [], zs = [];
+        let px = 0, py = 0;
+        for (let k = 0, i = 0; k < flat.length; i++) {
+          const hMeters = flat[k] / 10, np = flat[k + 1];
+          k += 2;
+          xs.length = 0; zs.length = 0;
+          for (let q = 0; q < np; q++, k += 2) {
+            px += flat[k]; py += flat[k + 1];
+            xs.push((px / 10 - netCenter.x) * SCALE);
+            zs.push(-(py / 10 - netCenter.y) * SCALE);
+          }
+          if (np < 3) continue;
+          const hs = stepsFor(hMeters), h = hs[0], steps = hs[1];
+          const bc = (i % 7 === 0) ? colRoofHighlight : ((i % 2 === 0) ? colBldgPrimary : colBldgSecondary);
 
-              const isRoof = (s === steps);
-              const c = isRoof ? bldgCol : bldgCol.clone().multiplyScalar(0.7 + (s / steps) * 0.3);
-              pColor.push(c.r, c.g, c.b);
-              pSize.push(isRoof ? 2.0 : 1.7);
-              pPhase.push(i * 0.08 + s * 0.3);
-              pCat.push(3.0);
+          for (let j = 0; j < np; j++) {
+            for (let s2 = 0; s2 <= steps; s2++) {
+              const y = (s2 / steps) * h;
+              const isRoof = (s2 === steps);
+              const f = isRoof ? 1.0 : (0.7 + (s2 / steps) * 0.3);
+              put(xs[j], y, zs[j], bc.r * f, bc.g * f, bc.b * f, isRoof ? 2.0 : 1.7, i * 0.08 + s2 * 0.3);
             }
           }
 
-          if (sPts.length >= 3 && i % 3 === 0) {
-            let cx = 0, cz = 0;
-            sPts.forEach(p => { cx += p.x; cz += p.z; });
-            cx /= sPts.length;
-            cz /= sPts.length;
-
-            const swRoof = randomSwarmCluster(currentParticleIndex++);
-            pTarget.push(cx, h, cz);
-            pSwarm.push(swRoof.x, swRoof.y, swRoof.z);
-            pColor.push(bldgCol.r * 1.1, bldgCol.g * 1.1, bldgCol.b * 1.1);
-            pSize.push(2.15);
-            pPhase.push(i * 0.05);
-            pCat.push(3.0);
-          }
+          let cx = 0, cz = 0;
+          for (let j = 0; j < np; j++) { cx += xs[j]; cz += zs[j]; }
+          cx /= np; cz /= np;
+          if (i % 3 === 0) put(cx, h, cz, bc.r * 1.1, bc.g * 1.1, bc.b * 1.1, 2.15, i * 0.05);
           // Relleno interior muy ligero: un punto a media altura cada 4 edificios.
-          // Mejora la lectura volumétrica sin densificar toda la zona construida.
-          if (sPts.length >= 3 && i % 4 === 0) {
-            let mx = 0, mz = 0;
-            sPts.forEach(p => { mx += p.x; mz += p.z; });
-            mx /= sPts.length;
-            mz /= sPts.length;
-            const swMid = randomSwarmCluster(currentParticleIndex++);
-            pTarget.push(mx, h * 0.52, mz);
-            pSwarm.push(swMid.x, swMid.y, swMid.z);
-            pColor.push(bldgCol.r * 0.92, bldgCol.g * 0.92, bldgCol.b * 0.92);
-            pSize.push(1.85);
-            pPhase.push(i * 0.07 + 0.5);
-            pCat.push(3.0);
-          }
-        });
+          if (i % 4 === 0) put(cx, h * 0.52, cz, bc.r * 0.92, bc.g * 0.92, bc.b * 0.92, 1.85, i * 0.07 + 0.5);
+        }
 
+        bldgBuf = { t: T, s: S, c: C, z: Z, p: P, k: K };
         rebuildTerritoryParticles();
       })
       .catch(err => console.warn("Error edificios:", err));
   }
 
-  // Cargar las 4 capas del territorio
-  Promise.all([loadWater(), loadTrees(), loadRoads(), loadBuildings()])
-    .then(() => console.log("Capas de territorio cargadas exitosamente."))
-    .catch(e => console.warn("Aviso carga territorio:", e));
+  // Cargar las 4 capas del territorio SOLO cuando hacen falta: la red se muestra primero.
+  // En computador se precargan en segundo plano; en celular al pulsar MATERIALIZAR / mover el slider.
+  let territoryPromise = null;
+  function ensureTerritory() {
+    if (territoryPromise) return territoryPromise;
+    const loadingTip = document.getElementById("territoryLoadingTip");
+    if (loadingTip) loadingTip.classList.add("show");
+    territoryPromise = Promise.all([loadWater(), loadTrees(), loadRoads()])
+      .then(() => loadBuildings())
+      .then(() => console.log("Capas de territorio cargadas exitosamente."))
+      .catch(e => console.warn("Aviso carga territorio:", e))
+      .finally(() => { if (loadingTip) loadingTip.classList.remove("show"); });
+    return territoryPromise;
+  }
+  if (!IS_MOBILE) {
+    setTimeout(() => {
+      if (window.requestIdleCallback) requestIdleCallback(() => ensureTerritory(), { timeout: 4000 });
+      else ensureTerritory();
+    }, 3500);
+  }
 
   // =====================================================================
   // 5. CONSTELACIONES BOTÁNICAS Y RECORRIDOS
@@ -4349,6 +4623,7 @@ window.onerror = function(msg, url, line, col, error) {
   const labelTerritory = document.getElementById("labelTerritory");
 
   function animateToStage(target) {
+    if (target > 0) ensureTerritory();
     targetMorph = target;
     isTerritory = target > 0.5;
 
@@ -4396,6 +4671,7 @@ window.onerror = function(msg, url, line, col, error) {
   if (slider) {
     slider.addEventListener("input", (e) => {
       const val = parseFloat(e.target.value) / 100.0;
+      if (val > 0) ensureTerritory();
       currentMorph = val;
       particleUniforms.uMorphProgress.value = val;
       updateStageVisibility();
@@ -4582,9 +4858,104 @@ window.onerror = function(msg, url, line, col, error) {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-    particleUniforms.uPixelRatio.value = Math.min(window.devicePixelRatio || 1, 2);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, MAX_DPR));
+    particleUniforms.uPixelRatio.value = Math.min(window.devicePixelRatio || 1, MAX_DPR);
   });
+})();
+</script>
+
+<script>
+// =====================================================================
+// Ajustes para celular: cabecera, hojas inferiores y exclusividad de paneles
+// =====================================================================
+(function () {
+  var mq = window.matchMedia('(max-width: 760px)');
+  var root = document.documentElement;
+  var hdr = document.getElementById('topHeader');
+  var bar = document.querySelector('.bottom-experience-bar');
+  var brand = hdr && hdr.querySelector('.brand-title');
+  var firstGroup = hdr && hdr.querySelector('.nav-group');
+  var drawer = document.getElementById('sideDrawer');
+  var gephi = document.getElementById('gephiPanel');
+  var btnSide = document.getElementById('btnToggleSide');
+  var btnGephi = document.getElementById('btnGephiMobile');
+  var inspector = document.getElementById('nodeInspector');
+  var chat = document.getElementById('faqChatModal');
+  if (!hdr || !bar) return;
+
+  function measure() {
+    root.style.setProperty('--hdr-h', hdr.offsetHeight + 'px');
+    root.style.setProperty('--bar-h', bar.offsetHeight + 'px');
+  }
+  function shown(el) { return el && el.style.display !== 'none' && getComputedStyle(el).display !== 'none'; }
+  function syncSheets() {
+    if (!mq.matches) { document.body.classList.remove('m-sheet'); return; }
+    var open = (drawer && !drawer.classList.contains('collapsed')) ||
+               (gephi && gephi.classList.contains('m-open') && shown(gephi)) ||
+               shown(inspector) || shown(chat);
+    document.body.classList.toggle('m-sheet', !!open);
+    if (btnSide) btnSide.classList.toggle('active', drawer && !drawer.classList.contains('collapsed'));
+    if (btnGephi) btnGephi.classList.toggle('active', gephi && gephi.classList.contains('m-open'));
+  }
+  function closeOthers(keep) {
+    if (!mq.matches) return;
+    if (keep !== 'drawer' && drawer) drawer.classList.add('collapsed');
+    if (keep !== 'gephi' && gephi) gephi.classList.remove('m-open');
+    if (keep !== 'inspector' && shown(inspector) && window.closeInspector) window.closeInspector();
+    if (keep !== 'chat' && shown(chat) && window.toggleFaqChat) window.toggleFaqChat();
+  }
+
+  var origToggleSide = window.toggleSideDrawer;
+  window.toggleSideDrawer = function () {
+    if (origToggleSide) origToggleSide();
+    if (drawer && !drawer.classList.contains('collapsed')) closeOthers('drawer');
+    syncSheets();
+  };
+  window.toggleGephiMobile = function () {
+    if (!gephi) return;
+    var open = !gephi.classList.contains('m-open');
+    gephi.classList.toggle('m-open', open);
+    if (open) closeOthers('gephi');
+    syncSheets();
+  };
+
+  var wasMobile = null;
+  function apply() {
+    var m = mq.matches;
+    if (brand) {
+      if (m && brand.parentElement !== hdr) hdr.insertBefore(brand, hdr.firstChild);
+      if (!m && firstGroup && brand.parentElement !== firstGroup) firstGroup.insertBefore(brand, firstGroup.firstChild);
+    }
+    if (m && wasMobile !== true && drawer) drawer.classList.add('collapsed');   // red limpia al abrir en celular
+    if (!m && wasMobile === true) {
+      if (drawer) drawer.classList.remove('collapsed');
+      if (btnSide) btnSide.classList.add('active');
+    }
+    wasMobile = m;
+    measure();
+    syncSheets();
+  }
+
+  if (window.MutationObserver) {
+    var mo = new MutationObserver(function (list) {
+      list.forEach(function (rec) {
+        var t = rec.target;
+        if (t === inspector && shown(inspector)) closeOthers('inspector');
+        if (t === chat && shown(chat)) closeOthers('chat');
+      });
+      syncSheets();
+    });
+    [drawer, gephi, inspector, chat].forEach(function (el) {
+      if (el) mo.observe(el, { attributes: true, attributeFilter: ['style', 'class'] });
+    });
+    var mo2 = new MutationObserver(measure);
+    mo2.observe(bar, { childList: true, subtree: true, characterData: true });
+  }
+  if (mq.addEventListener) mq.addEventListener('change', apply); else if (mq.addListener) mq.addListener(apply);
+  window.addEventListener('resize', measure);
+  window.addEventListener('orientationchange', function () { setTimeout(measure, 300); });
+  apply();
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(measure);
 })();
 </script>
 </body>
