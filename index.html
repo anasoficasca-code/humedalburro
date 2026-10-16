@@ -3998,9 +3998,9 @@ window.onerror = function(msg, url, line, col, error) {
     return null;
   }
 
-  // Demostración para el video: el primer clic en cualquier nodo muestra el búho sabanero
+  // Demostración (solo web): el primer clic en cualquier nodo muestra el búho sabanero
   // y a los 2,6 s abre automáticamente su sub-red de interrelaciones.
-  let owlDemoPending = false;   // demo del búho desactivada
+  let owlDemoPending = !IS_MOBILE;   // solo en computador (web); en celular cada clic abre su propia especie
   function handleNodeClick(nodeObj) {
     if (owlDemoPending) {
       owlDemoPending = false;
