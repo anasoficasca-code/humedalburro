@@ -1412,8 +1412,9 @@ window.onerror = function(msg, url, line, col, error) {
 
   const RED = window.RED_DATA;
   // Gama de marca: violeta #660ED3, lima #DBF343, negro #111010 (con tonos intermedios para distinguir capas)
-  const CAT_PALETTE = ["#DBF343", "#8A3FFC", "#B98CFF", "#A8D920", "#F1FAB0", "#6A2BD9", "#D4C2FF", "#C9CDB8"];
-  const REL_PALETTE = ["#DBF343", "#9B5CFF", "#C3E83A", "#7C3AED", "#E9F78A", "#A78BFA", "#660ED3", "#BFD84A", "#8E8A99", "#D8CCFF"];
+  // Neón sobre negro, validado con dataviz/validate_palette.js (modo oscuro, superficie #111010)
+  const CAT_PALETTE = ["#DBF343", "#9D5CFF", "#FF4FA3", "#F2742A", "#18A4C2", "#1FAE7B", "#C9B8FF", "#8E8A99"];
+  const REL_PALETTE = ["#DBF343", "#9D5CFF", "#18A4C2", "#FF4FA3", "#F2742A", "#8E8A99", "#1FAE7B", "#C9B8FF", "#660ED3", "#E9F78A"];
   RED.categories.forEach((c, i) => { if (CAT_PALETTE[i]) c.color = CAT_PALETTE[i]; });
   RED.interactions.forEach((t, i) => { if (REL_PALETTE[i]) t.color = REL_PALETTE[i]; });
   const CAT_COUNT = RED.categories.length, INTER_COUNT = RED.interactions.length;
@@ -1553,7 +1554,7 @@ window.onerror = function(msg, url, line, col, error) {
   // Analisis de red estilo Gephi (calculado por tools/build-red.js con el mismo formato)
   // nodes[id] = [comunidad Louvain, intermediacion normalizada 0-1, x, y, z de layout de fuerza 3D]
   const GEPHI = RED.gephi;
-  const COMM_COLORS = ['#DBF343', '#8A3FFC', '#B98CFF', '#A8D920', '#6A2BD9', '#F1FAB0', '#D4C2FF', '#7C3AED'];
+  const COMM_COLORS = ['#DBF343', '#9D5CFF', '#FF4FA3', '#F2742A', '#18A4C2', '#1FAE7B', '#C9B8FF', '#8E8A99'];
   var _viewEc = null, _viewOrder = null;
 
   const rawTaxa = FULL_DATASET;
@@ -1570,7 +1571,7 @@ window.onerror = function(msg, url, line, col, error) {
     const D = camera.position.distanceTo(controls.target), R = SPHERE_RADIUS + 4;
     nodeSprites.forEach(sp => {
       const d = camera.position.distanceTo(sp.position), t = Math.max(0, Math.min(1, (d - (D - R * 0.2)) / (R * 1.0)));
-      sp.material.opacity = 1 - 0.82 * t * t * (3 - 2 * t);
+      sp.material.opacity = 1; // las bolas siempre opacas (sin transparencia por profundidad)
     });
   }, 80); // factor de tamaño de los nodos (el nombre va dentro)
 
@@ -1624,17 +1625,35 @@ window.onerror = function(msg, url, line, col, error) {
     const tex = new THREE.CanvasTexture(cvs);
 
     // Circulo: icono arriba y el nombre COMPLETO dentro (el tamaño del texto se ajusta para que quepa)
-    // Punto luminoso: núcleo blanco con halo del color de su capa (estilo constelación)
+    // Bola sólida (opaca): fondo oscuro teñido con el color de su capa, aro de color e ícono vectorial dentro
+    const mix = (hex, base, t) => '#' + [1, 3, 5].map(i => Math.round(parseInt(base.slice(i, i + 2), 16) * (1 - t) + parseInt(hex.slice(i, i + 2), 16) * t).toString(16).padStart(2, '0')).join('');
     const drawFallback = () => {
       ctx.clearRect(0, 0, SZ, SZ);
-      const halo = ctx.createRadialGradient(256, 256, 100, 256, 256, 256);
-      halo.addColorStop(0, catColor + '70'); halo.addColorStop(0.3, catColor + '22'); halo.addColorStop(0.7, catColor + '00');
-      ctx.fillStyle = halo; ctx.fillRect(0, 0, SZ, SZ);
-      ctx.beginPath(); ctx.arc(256, 256, 118, 0, Math.PI * 2); ctx.fillStyle = catColor; ctx.fill();
-      ctx.beginPath(); ctx.arc(256, 256, 104, 0, Math.PI * 2); ctx.fillStyle = '#ffffff'; ctx.fill();
+      const glow = ctx.createRadialGradient(256, 256, 228, 256, 256, 256);
+      glow.addColorStop(0, catColor + '66'); glow.addColorStop(1, catColor + '00');
+      ctx.beginPath(); ctx.arc(256, 256, 256, 0, Math.PI * 2); ctx.fillStyle = glow; ctx.fill();
+      ctx.beginPath(); ctx.arc(256, 256, 232, 0, Math.PI * 2); ctx.fillStyle = catColor; ctx.fill();
+      const fill = ctx.createLinearGradient(0, 40, 0, 472);
+      fill.addColorStop(0, mix(catColor, '#111010', 0.30)); fill.addColorStop(1, mix(catColor, '#111010', 0.12));
+      ctx.beginPath(); ctx.arc(256, 256, 206, 0, Math.PI * 2); ctx.fillStyle = fill; ctx.fill();
+      // Ícono arriba y el nombre COMPLETO debajo (el texto se ajusta para que quepa)
+      const ch = faChar(icon);
+      ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+      if (ch) { ctx.font = FA_FONT.replace('{S}', '92'); ctx.fillStyle = catColor; ctx.fillText(ch, 256, 156); }
+      const top = ch ? 180 : 120, bottom = 400, availH = bottom - top;
+      let size = 40, lines = null;
+      for (; size >= 16; size -= 2) {
+        ctx.font = '700 ' + size + 'px Inter, "Segoe UI", sans-serif';
+        lines = wrapLines(ctx, speciesName, 300, 99);
+        if (lines && lines.length * (size + 5) <= availH) break;
+      }
+      ctx.fillStyle = '#ffffff';
+      const y0 = top + (availH - lines.length * (size + 5)) / 2 + size * 0.85;
+      lines.forEach((l, i) => ctx.fillText(l, 256, y0 + i * (size + 5)));
       tex.needsUpdate = true;
     };
     drawFallback();
+    texRedraws.push(drawFallback);
 
     if (false && imgUrl) {
       const img = new Image();
@@ -1678,6 +1697,7 @@ window.onerror = function(msg, url, line, col, error) {
     const sprite = new THREE.Sprite(spriteMat);
     sprite.scale.set(3.4 * NODE_K, 3.4 * NODE_K, 1.0);
     sprite.position.set(nx, ny, nz);
+    sprite.renderOrder = 3; // las bolas tapan las líneas
     sprite.userData = { id: idx, taxaId: tData.id, taxon: tData };
     networkGroup.add(sprite);
     nodeSprites.push(sprite);
@@ -1758,7 +1778,7 @@ window.onerror = function(msg, url, line, col, error) {
     blending: THREE.AdditiveBlending
   });
   // Tamaño del punto según sus conexiones: los nodos más conectados son claramente más grandes
-  const degScale = n => 1.1 + Math.pow((n.neighbors.length || 0) / maxFullDeg(), 0.8) * 7.4;
+  const degScale = n => 3.0 + Math.pow((n.neighbors.length || 0) / maxFullDeg(), 0.8) * 5.6;
   const edgeLinesMesh = new THREE.LineSegments(edgeGeo, edgeMat);
   networkGroup.add(edgeLinesMesh);
   // Plano 2D: conexiones gruesas con flecha (cintas planas)
@@ -1981,7 +2001,30 @@ window.onerror = function(msg, url, line, col, error) {
   function maxFullDeg() { let m = 1; for (const n of rawNodes) if (n.neighbors.length > m) m = n.neighbors.length; return m; }
 
   function gephiLayoutPos(n, type) {
-    if (type === 'forceatlas') { const g = gNode(n); return g ? { x: g[2] * 1.0, y: g[3] * 1.0, z: g[4] * 1.0 } : { x: n.ox, y: n.oy, z: n.oz }; }
+    if (type === 'forceatlas') {
+      // Red redonda: se conserva la dirección de cada nodo (vecinos juntos) y la distancia al centro se
+      // reparte de forma pareja dentro de una esfera; los más conectados quedan hacia el centro
+      if (!window._roundPos) {
+        const pts = rawNodes.map(m => { const g = gNode(m); return g ? { id: m.id, x: g[2], y: g[3], z: g[4], d: m.neighbors.length } : { id: m.id, x: m.ox, y: m.oy, z: m.oz, d: m.neighbors.length }; });
+        const cx = pts.reduce((s, p) => s + p.x, 0) / pts.length, cy = pts.reduce((s, p) => s + p.y, 0) / pts.length, cz = pts.reduce((s, p) => s + p.z, 0) / pts.length;
+        pts.forEach(p => { p.x -= cx; p.y -= cy; p.z -= cz; p.r = Math.hypot(p.x, p.y, p.z) || 0.001; });
+        const order = pts.slice().sort((a, b) => (a.r / (1 + a.d * 0.15)) - (b.r / (1 + b.d * 0.15)));
+        // disco redondo de frente: dirección en el plano XY y radio repartido de forma pareja (√)
+        const R = 40, out = {};
+        order.forEach((p, i) => { const r2 = Math.hypot(p.x, p.y) || 0.001, k = R * Math.sqrt((i + 0.6) / order.length) / r2; out[p.id] = { x: p.x * k, y: p.y * k, z: ((i % 3) - 1) * 0.6 }; });
+        // separa las bolas que se tocan (según su tamaño) sin perder la forma redonda
+        const ids = Object.keys(out), rad = {}; rawNodes.forEach(m => { rad[m.id] = degScale(m) * NODE_K * 0.5; });
+        for (let it = 0; it < 120; it++) {
+          for (let a = 0; a < ids.length; a++) for (let b = a + 1; b < ids.length; b++) {
+            const A = out[ids[a]], B = out[ids[b]], dx = B.x - A.x, dy = B.y - A.y, d = Math.hypot(dx, dy) || 0.01;
+            const need = rad[ids[a]] + rad[ids[b]] + 1.4;
+            if (d < need) { const s = (need - d) / 2 / d; A.x -= dx * s; A.y -= dy * s; B.x += dx * s; B.y += dy * s; }
+          }
+        }
+        window._roundPos = out;
+      }
+      return window._roundPos[n.id];
+    }
     if (!_viewOrder) {
       // Circular: ordenado por comunidad y, dentro de ella, por grado
       const circ = rawNodes.slice().sort((a, b) => (commOf(a) - commOf(b)) || (b.neighbors.length - a.neighbors.length));
@@ -2111,7 +2154,15 @@ window.onerror = function(msg, url, line, col, error) {
 
   recalculateDegreesAndSizes();
   // Arranca como nube de fuerzas (los nodos relacionados se atraen)
-  setTimeout(() => { if (window.setLayout && opts.layout === 'hyperbolic') window.setLayout('forceatlas'); }, 60);
+  setTimeout(() => {
+    if (!window.setLayout || opts.layout !== 'hyperbolic') return;
+    window.setLayout('forceatlas');
+    // de frente al disco, sin giro automático (para que siempre se vea redonda y se lean los nombres)
+    opts.autoRotate = false; controls.autoRotate = false; document.getElementById('btnAutoRot')?.classList.remove('active');
+    const z = camera.aspect < 1 ? 190 / Math.max(0.55, camera.aspect) : 118;
+    if (window.gsap) { gsap.to(camera.position, { x: 0, y: 0, z, duration: 1.6, ease: 'power2.inOut' }); gsap.to(controls.target, { x: 0, y: 0, z: 0, duration: 1.6 }); }
+    else { camera.position.set(0, 0, z); controls.target.set(0, 0, 0); }
+  }, 60);
 
   // =====================================================================
   // 3. GLSL SHADER DE TERRITORIO CON VÓRTICE & TRANSFORMACIÓN CUÁNTICA
