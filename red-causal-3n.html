@@ -962,8 +962,8 @@ window.onerror = function(msg, url, line, col, error) {
   </div>
 
   <div class="nav-group">
-    <button class="glass-panel btn-flat active" id="btnLayoutNiv" onclick="setLayout('niveles3d')" title="Niveles 3D: la causa asciende del Nivel 1 (abajo) al Nivel 3 (arriba)">
-      <span>Niveles 3D</span>
+    <button class="glass-panel btn-flat active" id="btnLayoutRed" onclick="setLayout('red3d')" title="Red 3D: todo junto; los más conectados al centro. Arrastra las bolas">
+      <span>Red 3D</span>
     </button>
 
     <button class="glass-panel btn-flat" id="btnLayoutHyp" onclick="setLayout('hyperbolic')">
@@ -1440,7 +1440,7 @@ window.onerror = function(msg, url, line, col, error) {
   // las capas y relaciones del POT (prefijo "POT · ") van en gris violáceo para no recargar de colores
   const CAT_PALETTE = ["#F2F2F2", "#8A3FFC", "#8A3FFC", "#DBF343", "#8E8A99"];
   const REL_PALETTE = ["#DBF343", "#8A3FFC", "#5E5A66", "#8A3FFC", "#8A3FFC", "#5E5A66"];
-  const POT_CAT = "#8F86A8", POT_REL = "#4A4458";
+  const POT_CAT = "#B7ABDB", POT_REL = "#5A5370";
   RED.categories.forEach((c, i) => { c.color = /^POT/.test(c.name) ? POT_CAT : (CAT_PALETTE[i] || POT_CAT); });
   RED.interactions.forEach((t, i) => { t.color = /^POT/.test(t.name) ? POT_REL : (REL_PALETTE[i] || POT_REL); });
   const CAT_COUNT = RED.categories.length, INTER_COUNT = RED.interactions.length;
@@ -2073,6 +2073,48 @@ window.onerror = function(msg, url, line, col, error) {
   }
 
   // =====================================================================
+  // RED 3D: todo junto, medio redonda. Los más conectados al centro; los de menos
+  // conexiones un poco más afuera (poco). Vecinos cerca (dirección del layout de fuerzas).
+  // =====================================================================
+  function red3dPos(n) {
+    if (!window._red3d) {
+      const N = rawNodes.length, md = maxFullDeg();
+      const pts = rawNodes.map((m, i) => {
+        const g = gNode(m); let x, y, z;
+        if (g) { x = g[2]; y = g[3]; z = g[4]; }
+        else { const ph = Math.acos(1 - 2 * (i + 0.5) / N), th = Math.PI * (1 + Math.sqrt(5)) * i; x = Math.sin(ph) * Math.cos(th); y = Math.sin(ph) * Math.sin(th); z = Math.cos(ph); }
+        return { id: m.id, x, y, z, d: m.neighbors.length };
+      });
+      const c = ['x', 'y', 'z'].map(k => pts.reduce((s, p) => s + p[k], 0) / N);
+      pts.forEach(p => { p.x -= c[0]; p.y -= c[1]; p.z -= c[2]; const l = Math.hypot(p.x, p.y, p.z) || 1; p.ux = p.x / l; p.uy = p.y / l; p.uz = p.z / l; });
+      // forma redonda: cada nodo toma la dirección libre (repartida parejo en la esfera) más parecida a la suya
+      const dirs = []; for (let i = 0; i < N; i++) { const ph = Math.acos(1 - 2 * (i + 0.5) / N), th = Math.PI * (1 + Math.sqrt(5)) * i; dirs.push({ x: Math.sin(ph) * Math.cos(th), y: Math.cos(ph), z: Math.sin(ph) * Math.sin(th), used: false }); }
+      // orden: por comunidad (Louvain) y dentro de ella por la dirección del layout de fuerzas -> vecinos juntos
+      const comm = id => { const g = GEPHI.nodes[rawNodes[id].taxaId]; return g ? g[0] : 99; };
+      pts.slice().sort((a, b) => (comm(a.id) - comm(b.id)) || (Math.atan2(a.uz, a.ux) - Math.atan2(b.uz, b.ux)))
+        .forEach((p, i) => { const q = dirs[i]; p.ux = q.x; p.uy = q.y; p.uz = q.z; });
+      const R = 15 * Math.cbrt(N), out = {}, rad = {};
+      pts.forEach(p => {
+        const t = 1 - Math.pow(p.d / md, 0.6);            // 0 = el más conectado, 1 = el menos
+        const r = R * (0.15 + 0.85 * Math.pow(t, 0.8));   // hubs al centro, poco conectados un poco afuera
+        out[p.id] = { x: p.ux * r, y: p.uy * r, z: p.uz * r };
+      });
+      rawNodes.forEach(m => { rad[m.id] = degScale(m) * NODE_K * 0.5; });
+      const ids = Object.keys(out);
+      for (let it = 0; it < 160; it++) {
+        for (let a = 0; a < ids.length; a++) for (let b = a + 1; b < ids.length; b++) {
+          const A = out[ids[a]], B = out[ids[b]], dx = B.x - A.x, dy = B.y - A.y, dz = B.z - A.z, d = Math.hypot(dx, dy, dz) || 0.01;
+          const need = rad[ids[a]] + rad[ids[b]] + 2.2;
+          if (d < need) { const s = (need - d) / 2 / d; A.x -= dx * s; A.y -= dy * s; A.z -= dz * s; B.x += dx * s; B.y += dy * s; B.z += dz * s; }
+        }
+        ids.forEach(id => { const p = out[id], r = Math.hypot(p.x, p.y, p.z), lim = R * 1.15; if (r > lim) { p.x *= lim / r; p.y *= lim / r; p.z *= lim / r; } });
+      }
+      window._red3d = out; window._red3dR = Math.max(...ids.map(id => Math.hypot(out[id].x, out[id].y, out[id].z) + rad[id]));
+    }
+    return window._red3d[n.id];
+  }
+
+  // =====================================================================
   // NIVELES 3D (vista didáctica): la causa asciende de abajo hacia arriba
   //   Nivel 1 abajo · Nivel 2 al medio · Nivel 3 arriba · Indicadores en un anillo exterior ·
   //   Contexto POT como un cilindro que envuelve la red
@@ -2268,7 +2310,7 @@ window.onerror = function(msg, url, line, col, error) {
     const el = document.getElementById('gpInfo');
     if (!el) return;
     const mode = opts.viewMode || 'taxonomy';
-    const LAY = { niveles3d: 'Niveles 3D', plano2d: 'Plano 2D', forceatlas: 'ForceAtlas2', circular: 'Circular', radial: 'Ejes radiales', hyperbolic: 'Hiperbólico', clustered: 'Por grupos', concentric: 'Anillos' };
+    const LAY = { red3d: 'Red 3D', niveles3d: 'Niveles 3D', plano2d: 'Plano 2D', forceatlas: 'ForceAtlas2', circular: 'Circular', radial: 'Ejes radiales', hyperbolic: 'Hiperbólico', clustered: 'Por grupos', concentric: 'Anillos' };
     const lay = LAY[opts.layout] || 'Hiperbólico';
     let html = '';
     if (mode === 'community') {
@@ -2304,12 +2346,14 @@ window.onerror = function(msg, url, line, col, error) {
   };
 
   recalculateDegreesAndSizes();
-  // Arranca en Niveles 3D (vista didáctica) con giro lento
+  // Arranca en Red 3D (todo junto, medio redonda) con giro lento
   setTimeout(() => {
     if (!window.setLayout || opts.layout !== 'hyperbolic') return;
-    window.setLayout('niveles3d');
+    window.setLayout('red3d');
     opts.autoRotate = true; document.getElementById('btnAutoRot')?.classList.add('active');
-    Niveles.setStep(0);
+    const D = (window._red3dR + 6) / Math.tan(camera.fov * Math.PI / 360) / Math.min(1, camera.aspect);
+    if (window.gsap) { gsap.to(camera.position, { x: 0, y: D * 0.18, z: D, duration: 1.6, ease: 'power2.inOut' }); gsap.to(controls.target, { x: 0, y: 0, z: 0, duration: 1.6 }); }
+    else { camera.position.set(0, D * 0.18, D); controls.target.set(0, 0, 0); }
   }, 60);
 
   // =====================================================================
@@ -3580,7 +3624,7 @@ window.onerror = function(msg, url, line, col, error) {
       if (b.id && b.id.startsWith("btnLayout")) b.classList.remove("active");
     });
     if (type === 'hyperbolic') document.getElementById("btnLayoutHyp")?.classList.add("active");
-    if (type === 'niveles3d') document.getElementById("btnLayoutNiv")?.classList.add("active");
+    if (type === 'red3d') document.getElementById("btnLayoutRed")?.classList.add("active");
     if (window.Niveles) Niveles.show(type === 'niveles3d');
     if (type === 'clustered') document.getElementById("btnLayoutClust")?.classList.add("active");
     if (type === 'concentric') document.getElementById("btnLayoutConc")?.classList.add("active");
@@ -3642,6 +3686,7 @@ window.onerror = function(msg, url, line, col, error) {
         const p = gephiLayoutPos(n, type); tx = p.x; ty = p.y; tz = p.z;
       }
       if (type === 'niveles3d' && window.Niveles) { const p = Niveles.pos(n); tx = p.x; ty = p.y; tz = p.z; }
+      if (type === 'red3d') { const p = red3dPos(n); tx = p.x; ty = p.y; tz = p.z; }
 
       if (window.gsap) {
         gsap.to(n.sprite.position, {
@@ -4716,17 +4761,57 @@ window.viewInRhinoWeb = (identifier, isUrl = false) => {
         const sp = intersects[0].object;
         const nodeObj = rawNodes[sp.userData.id];
         if (nodeObj) {
-          __nodeClicks('main' + nodeObj.id, e,
-            () => handleNodeClick(nodeObj),
-            () => { // doble clic: ocultar nodo
-              nodeObj.hiddenByUser = true;
-              closeInspector();
-              recalculateDegreesAndSizes();
-              if (toastNotify) { toastNotify.style.display = "block"; setTimeout(() => { toastNotify.style.display = "none"; }, 2400); }
-            },
-            (x, y) => showSource(nodeObj, x, y));
+          // arrastrar: la bola se mueve en un plano frente a la cámara; si no se mueve, es un clic normal
+          const wp = sp.getWorldPosition(new THREE.Vector3());
+          const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(camera.getWorldDirection(new THREE.Vector3()).negate(), wp);
+          const hit = new THREE.Vector3(); raycaster.ray.intersectPlane(plane, hit);
+          window._dragNode = { n: nodeObj, plane, off: wp.clone().sub(hit), x0: e.clientX, y0: e.clientY, moved: false, ev: e };
+          controls.enabled = false;
         }
       }
+    }
+  });
+
+  function nodeClickAction(nodeObj, e) {
+    __nodeClicks('main' + nodeObj.id, e,
+      () => handleNodeClick(nodeObj),
+      () => { // doble clic: ocultar nodo
+        nodeObj.hiddenByUser = true;
+        closeInspector();
+        recalculateDegreesAndSizes();
+        if (toastNotify) { toastNotify.style.display = "block"; setTimeout(() => { toastNotify.style.display = "none"; }, 2400); }
+      },
+      (x, y) => showSource(nodeObj, x, y));
+  }
+  window.addEventListener("pointermove", (e) => {
+    const D = window._dragNode;
+    if (!D) {
+      // cursor de mano sobre las bolas (se pueden arrastrar)
+      if (currentMorph < 0.35 && e.target === canvas) {
+        mouseVec.x = (e.clientX / window.innerWidth) * 2 - 1; mouseVec.y = -(e.clientY / window.innerHeight) * 2 + 1;
+        raycaster.setFromCamera(mouseVec, camera);
+        canvas.style.cursor = raycaster.intersectObjects(nodeSprites.filter(sp => sp.visible), false).length ? 'grab' : 'crosshair';
+      }
+      return;
+    }
+    if (!D.moved && Math.hypot(e.clientX - D.x0, e.clientY - D.y0) < 5) return;
+    D.moved = true; canvas.style.cursor = 'grabbing';
+    mouseVec.x = (e.clientX / window.innerWidth) * 2 - 1; mouseVec.y = -(e.clientY / window.innerHeight) * 2 + 1;
+    raycaster.setFromCamera(mouseVec, camera);
+    const hit = new THREE.Vector3(); if (!raycaster.ray.intersectPlane(D.plane, hit)) return;
+    const local = networkGroup.worldToLocal(hit.add(D.off));
+    const n = D.n, dx = local.x - n.x, dy = local.y - n.y, dz = local.z - n.z;
+    n.x = local.x; n.y = local.y; n.z = local.z; n.sprite.position.set(n.x, n.y, n.z);
+    // las vecinas acompañan un poco (efecto elástico)
+    n.neighbors.forEach(m => { if (m === n) return; m.x += dx * 0.18; m.y += dy * 0.18; m.z += dz * 0.18; });
+  });
+  window.addEventListener("pointerup", (e) => {
+    const D = window._dragNode; if (!D) return;
+    window._dragNode = null; controls.enabled = true; canvas.style.cursor = 'grab';
+    if (!D.moved) nodeClickAction(D.n, D.ev);
+    else if (window._red3d && opts.layout === 'red3d') {
+      // la nueva posición se recuerda en esta vista
+      [D.n].concat(D.n.neighbors).forEach(m => { window._red3d[m.id] = { x: m.x, y: m.y, z: m.z }; });
     }
   });
 
@@ -4928,7 +5013,7 @@ window.viewInRhinoWeb = (identifier, isUrl = false) => {
     particleUniforms.uTime.value = elapsedTime;
 
     if (opts.autoRotate && currentMorph < 0.35) {
-      networkGroup.rotation.y += delta * (opts.layout === 'niveles3d' ? 0.07 : 0.015);
+      if (!window._dragNode) networkGroup.rotation.y += delta * (opts.layout === 'red3d' || opts.layout === 'niveles3d' ? 0.06 : 0.015);
     } else {
       networkGroup.rotation.y = 0;
     }
