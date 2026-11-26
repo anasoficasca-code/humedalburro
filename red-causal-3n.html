@@ -807,6 +807,25 @@ window.onerror = function(msg, url, line, col, error) {
     color: #000; font-family: 'Inter', sans-serif; font-size: 10px; font-weight: 900;
     letter-spacing: 0.12em; text-transform: uppercase; cursor: pointer;
   }
+  /* Recorrido didáctico de Niveles 3D (panel de vidrio, mismo estilo que los demás) */
+  #nivTour { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 120; width: min(760px, calc(100vw - 32px));
+    background: var(--glass-bg); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border: 1px solid var(--glass-border);
+    border-radius: 12px; padding: 12px 14px; box-shadow: 0 12px 34px rgba(0,0,0,.5); }
+  #nivTour .niv-row { display: flex; align-items: center; gap: 6px; }
+  #nivTour .niv-steps { display: flex; gap: 6px; flex: 1; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+  #nivTour .niv-steps::-webkit-scrollbar { display: none; }
+  #nivTour .niv-step { flex: 1 0 auto; display: flex; align-items: center; gap: 6px; padding: 7px 10px; border-radius: 8px; cursor: pointer;
+    background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); color: #cbd5e1; font: 600 10.5px Inter, sans-serif; white-space: nowrap; transition: all .2s; }
+  #nivTour .niv-step .num { width: 18px; height: 18px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
+    font: 800 9.5px 'IBM Plex Mono', monospace; border: 1px solid var(--c); color: var(--c); }
+  #nivTour .niv-step:hover { border-color: var(--c); color: #fff; }
+  #nivTour .niv-step.active { background: var(--c); border-color: var(--c); color: #111010; }
+  #nivTour .niv-step.active .num { border-color: #111010; color: #111010; }
+  #nivTour .niv-arrow { flex: none; width: 30px; height: 30px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.14); background: rgba(255,255,255,0.04); color: #fff; cursor: pointer; }
+  #nivTour .niv-arrow:disabled { opacity: .3; cursor: default; }
+  #nivText { margin-top: 9px; display: flex; flex-direction: column; gap: 3px; font: 400 11.5px/1.5 Inter, sans-serif; color: #b9b9c4; }
+  #nivText b { font: 800 10.5px Inter, sans-serif; letter-spacing: .08em; }
+  @media (max-width: 640px) { #nivTour { bottom: 10px; padding: 10px; } #nivText { font-size: 11px; } #nivTour .niv-step { padding: 6px 8px; } }
 </style>
 
 <!-- Three.js, OrbitControls, GSAP -->
@@ -943,7 +962,11 @@ window.onerror = function(msg, url, line, col, error) {
   </div>
 
   <div class="nav-group">
-    <button class="glass-panel btn-flat active" id="btnLayoutHyp" onclick="setLayout('hyperbolic')">
+    <button class="glass-panel btn-flat active" id="btnLayoutNiv" onclick="setLayout('niveles3d')" title="Niveles 3D: la causa asciende del Nivel 1 (abajo) al Nivel 3 (arriba)">
+      <span>Niveles 3D</span>
+    </button>
+
+    <button class="glass-panel btn-flat" id="btnLayoutHyp" onclick="setLayout('hyperbolic')">
       <span>Hiperbólico</span>
     </button>
 
@@ -2049,8 +2072,131 @@ window.onerror = function(msg, url, line, col, error) {
     return { x: Math.cos(ang) * d - Math.sin(ang) * side, y: Math.sin(ang) * d + Math.cos(ang) * side, z: ((k % 5) - 2) * 0.6 };
   }
 
+  // =====================================================================
+  // NIVELES 3D (vista didáctica): la causa asciende de abajo hacia arriba
+  //   Nivel 1 abajo · Nivel 2 al medio · Nivel 3 arriba · Indicadores en un anillo exterior ·
+  //   Contexto POT como un cilindro que envuelve la red
+  // =====================================================================
+  window.Niveles = (() => {
+    const isPot = c => /^POT/.test((RED.categories[c] || {}).name || '');
+    const LEVELS = [
+      { key: 'n1', cats: [0], y: -56, title: 'NIVEL 1', sub: 'Manifestaciones visibles', text: 'Lo que se ve en la calle: residuos, invasión de calzadas y tractomulas en María Paz, Patio Bonito y El Amparo. Es el punto de partida.' },
+      { key: 'n2', cats: [1, 2], y: 0, title: 'NIVEL 2', sub: 'Efectos ecológicos y comunitarios', text: 'Lo que esos fenómenos producen: humedales presionados, corredores de carga, calor y aire, y una economía popular que se adapta (bicitaxis, coteros, garajes-depósito).' },
+      { key: 'n3', cats: [3], y: 56, title: 'NIVEL 3', sub: 'Causa estructural', text: 'La raíz: la hipercentralización alimentaria en Corabastos y la fragmentación territorial. Todo lo de abajo asciende hasta aquí.' },
+      { key: 'ind', cats: [4], y: 28, ring: true, title: 'INDICADORES', sub: 'Diez medidores', text: 'Cada indicador mide un fenómeno con una operación (producto, promedio, complemento o razón). Sus líneas muestran qué está midiendo.' },
+      { key: 'pot', cats: null, y: 0, pot: true, title: 'CONTEXTO POT', sub: 'Plan de Ordenamiento Territorial', text: 'Alrededor, el marco del POT de Kennedy: actuaciones estratégicas, movilidad, estructura ecológica, normas y actores. Explica dónde se apoya o choca la red causal.' }
+    ];
+    const levelOf = n => LEVELS.find(L => L.pot ? isPot(n.cat) : L.cats.includes(n.cat));
+    const radOf = n => degScale(n) * NODE_K * 0.5;
+    let cache = null;
+
+    function compute() {
+      const P = {}, info = {};
+      let inner = 0;
+      LEVELS.filter(L => !L.pot).forEach(L => {
+        const list = rawNodes.filter(n => L.cats.includes(n.cat)).sort((a, b) => (a.cat - b.cat) || (b.neighbors.length - a.neighbors.length));
+        const circ = list.reduce((s, n) => s + radOf(n) * 2 + 3.2, 0);
+        const minR = { n1: 24, n2: 30, n3: 14 }[L.key] || 10;
+        let R = Math.max(L.ring ? inner + 16 : minR, circ / (Math.PI * 2));
+        list.forEach((n, i) => { const a = i / list.length * Math.PI * 2 + (L.key === 'n2' ? 0.3 : 0); P[n.id] = { x: Math.cos(a) * R, y: L.y + ((i % 2) ? 2.5 : -2.5) * (L.key === 'n2' ? 1 : 0), z: Math.sin(a) * R }; });
+        info[L.key] = { R, y: L.y };
+        if (!L.ring) inner = Math.max(inner, R);
+      });
+      inner = Math.max(inner, info.ind ? info.ind.R : 0);
+      // contexto POT: cilindro exterior en 3 filas, agrupado por capa
+      const pot = rawNodes.filter(n => isPot(n.cat)).sort((a, b) => (a.cat - b.cat) || (b.neighbors.length - a.neighbors.length));
+      if (pot.length) {
+        const rows = 3, cols = Math.ceil(pot.length / rows), maxD = Math.max(...pot.map(radOf)) * 2 + 3;
+        const R = Math.max(inner + 26, cols * maxD / (Math.PI * 2));
+        pot.forEach((n, i) => { const c = Math.floor(i / rows), r = i % rows, a = (c + (r % 2) * 0.5) / cols * Math.PI * 2; P[n.id] = { x: Math.cos(a) * R, y: (r - 1) * 46, z: Math.sin(a) * R }; });
+        info.pot = { R, y: 0 };
+      }
+      return { P, info };
+    }
+
+    // etiquetas y anillos de cada piso
+    const group = new THREE.Group(); group.visible = false; networkGroup.add(group);
+    function label(title, sub, color) {
+      const c = document.createElement('canvas'); c.width = 1024; c.height = 256; const g = c.getContext('2d');
+      g.font = '800 96px Inter, "Segoe UI", sans-serif'; g.fillStyle = color; g.textBaseline = 'alphabetic'; g.fillText(title, 8, 110);
+      g.font = '500 54px Inter, "Segoe UI", sans-serif'; g.fillStyle = '#cfcfd6'; g.fillText(sub, 8, 190);
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), transparent: true, depthWrite: false }));
+      sp.scale.set(36, 9, 1); sp.center.set(0, 0.5); sp.renderOrder = 4; return sp;
+    }
+    function ring(R, y, color, op) {
+      const pts = []; for (let i = 0; i <= 96; i++) { const a = i / 96 * Math.PI * 2; pts.push(new THREE.Vector3(Math.cos(a) * R, y, Math.sin(a) * R)); }
+      return new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color, transparent: true, opacity: op, depthWrite: false }));
+    }
+    function build() {
+      while (group.children.length) group.remove(group.children[0]);
+      const { info } = cache;
+      LEVELS.forEach(L => {
+        const I = info[L.key]; if (!I) return;
+        const col = L.pot ? '#8F86A8' : (RED.categories[L.cats[0]] || {}).color || '#ffffff';
+        if (L.pot) { [-46, 0, 46].forEach(y => group.add(ring(I.R, y, col, 0.10))); }
+        else group.add(ring(I.R, I.y, col, L.ring ? 0.22 : 0.4));
+        const lb = label(L.title, L.sub, col); lb.position.set(I.R + 8, L.pot ? 72 : I.y + 6, 0); group.add(lb);
+      });
+      // eje central: la causa asciende
+      const axis = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, -64, 0), new THREE.Vector3(0, 66, 0)]), new THREE.LineBasicMaterial({ color: '#DBF343', transparent: true, opacity: 0.35 }));
+      const cone = new THREE.Mesh(new THREE.ConeGeometry(1.6, 4.5, 16), new THREE.MeshBasicMaterial({ color: '#DBF343', transparent: true, opacity: 0.6 }));
+      cone.position.set(0, 68, 0); group.add(axis, cone);
+    }
+
+    // panel del recorrido
+    (function buildTour() {
+      const el = document.createElement('div'); el.id = 'nivTour'; el.style.display = 'none';
+      const steps = [{ t: 'Cómo leer', c: '#DBF343' }].concat(LEVELS.map(L => ({ t: ({ n1: 'Nivel 1', n2: 'Nivel 2', n3: 'Nivel 3', ind: 'Indicadores', pot: 'Contexto POT' })[L.key], c: L.pot ? '#8F86A8' : (RED.categories[L.cats[0]] || {}).color })));
+      el.innerHTML = '<div class="niv-row"><button class="niv-arrow" id="nivPrev" aria-label="Anterior" onclick="Niveles.step(-1)"><i class="fa-solid fa-chevron-left"></i></button><div class="niv-steps">'
+        + steps.map((s, i) => '<button class="niv-step" style="--c:' + s.c + '" onclick="Niveles.setStep(' + i + ')"><span class="num">' + (i || '?') + '</span>' + s.t + '</button>').join('')
+        + '</div><button class="niv-arrow" id="nivNext" aria-label="Siguiente" onclick="Niveles.step(1)"><i class="fa-solid fa-chevron-right"></i></button></div><div id="nivText"></div>';
+      document.body.appendChild(el);
+    })();
+
+    let focus = null;
+    function inFocus(n) { return !focus || focus.has(n.cat); }
+    function setStep(i) {
+      const steps = document.querySelectorAll('#nivTour .niv-step');
+      steps.forEach((b, k) => b.classList.toggle('active', k === i));
+      const L = i > 0 ? LEVELS[i - 1] : null;
+      focus = L ? new Set(L.pot ? RED.categories.map((_, c) => c).filter(isPot) : L.cats) : null;
+      const t = document.getElementById('nivText');
+      if (t) t.innerHTML = L ? '<b style="color:' + (L.pot ? '#8F86A8' : RED.categories[L.cats[0]].color) + '">' + L.title + ' · ' + L.sub + '</b><span>' + L.text + '</span>'
+        : '<b style="color:#DBF343">CÓMO LEER LA RED</b><span>Se lee de abajo hacia arriba: lo visible (Nivel 1) produce efectos (Nivel 2) que remiten a una causa estructural (Nivel 3). El tamaño de cada bola es su número de conexiones.</span>';
+      document.getElementById('nivPrev').disabled = i === 0; document.getElementById('nivNext').disabled = i === LEVELS.length;
+      window._nivStep = i;
+      if (opts.layout !== 'niveles3d') window.setLayout('niveles3d');
+      applyViewAppearance(); updateEdgeLinesGeometry();
+      if (window.gsap && cache) {
+        const y = (L ? (L.pot ? 0 : cache.info[L.key].y) : 0) - (L && !L.pot ? 6 : 14);
+        const D = L && !L.pot ? (cache.info[L.key].R + 30) / Math.tan(camera.fov * Math.PI / 360) / Math.min(1, camera.aspect) : home(L && L.pot);
+        gsap.to(controls.target, { x: 0, y, z: 0, duration: 1.4, ease: 'power2.inOut' });
+        gsap.to(camera.position, { x: 0, y: y + D * 0.62, z: D * 0.9, duration: 1.4, ease: 'power2.inOut' });
+      }
+    }
+    // encuadre: el núcleo causal (o todo el cilindro POT cuando el paso es Contexto POT)
+    function home(all) {
+      const I = cache ? cache.info : {}, core = Math.max(I.n1 ? I.n1.R : 30, I.n2 ? I.n2.R : 30, I.ind ? I.ind.R : 30);
+      const R = all && I.pot ? I.pot.R + 30 : core + 22, H = all ? 80 : 72;
+      return Math.max(R, H) / Math.tan(camera.fov * Math.PI / 360) / Math.min(1, camera.aspect) * 1.05;
+    }
+    return {
+      pos(n) { if (!cache) { cache = compute(); build(); } return cache.P[n.id]; },
+      show(on) { if (on && !cache) { cache = compute(); build(); } group.visible = on; const tour = document.getElementById('nivTour'); if (tour) tour.style.display = on ? '' : 'none'; if (!on && focus) { focus = null; } },
+      inFocus, setStep, home, isPot,
+      potFocus() { return !!focus && [...focus].some(isPot); },
+      step(d) { setStep(Math.max(0, Math.min(LEVELS.length, (window._nivStep || 0) + d))); },
+      LEVELS
+    };
+  })();
+
   function viewEdgeColor(na, nb, inter) {
     if (!_viewEc) _viewEc = new THREE.Color();
+    if (window.Niveles && opts.layout === 'niveles3d') {
+      if (!(Niveles.inFocus(na) || Niveles.inFocus(nb))) return _viewEc.set('#141318');
+      // sin foco en el POT, las relaciones internas del POT quedan muy tenues para que se lea la red causal
+      if (!Niveles.potFocus() && (Niveles.isPot(na.cat) || Niveles.isPot(nb.cat))) return _viewEc.set(Niveles.isPot(na.cat) && Niveles.isPot(nb.cat) ? '#17161c' : '#26232e');
+    }
     const mode = opts.viewMode || 'taxonomy';
     if (mode === 'community') {
       const ca = commOf(na), cb = commOf(nb);
@@ -2091,6 +2237,10 @@ window.onerror = function(msg, url, line, col, error) {
         col.copy(white);
       }
       sc *= mult;
+      if (window.Niveles && opts.layout === 'niveles3d') {
+        if (Niveles.isPot(n.cat) && !Niveles.potFocus()) { col.multiplyScalar(0.5); sc *= 0.55; } // el POT acompaña, no tapa
+        if (!Niveles.inFocus(n)) col.multiplyScalar(0.3);
+      }
       if (opts.layout === 'plano2d') sc = planoSize(n) / NODE_K;
       n.sprite.scale.set(sc * NODE_K, sc * NODE_K, 1.0);
     });
@@ -2118,7 +2268,7 @@ window.onerror = function(msg, url, line, col, error) {
     const el = document.getElementById('gpInfo');
     if (!el) return;
     const mode = opts.viewMode || 'taxonomy';
-    const LAY = { plano2d: 'Plano 2D', forceatlas: 'ForceAtlas2', circular: 'Circular', radial: 'Ejes radiales', hyperbolic: 'Hiperbólico', clustered: 'Por grupos', concentric: 'Anillos' };
+    const LAY = { niveles3d: 'Niveles 3D', plano2d: 'Plano 2D', forceatlas: 'ForceAtlas2', circular: 'Circular', radial: 'Ejes radiales', hyperbolic: 'Hiperbólico', clustered: 'Por grupos', concentric: 'Anillos' };
     const lay = LAY[opts.layout] || 'Hiperbólico';
     let html = '';
     if (mode === 'community') {
@@ -2154,17 +2304,12 @@ window.onerror = function(msg, url, line, col, error) {
   };
 
   recalculateDegreesAndSizes();
-  // Arranca como nube de fuerzas (los nodos relacionados se atraen)
+  // Arranca en Niveles 3D (vista didáctica) con giro lento
   setTimeout(() => {
     if (!window.setLayout || opts.layout !== 'hyperbolic') return;
-    window.setLayout('forceatlas');
-    // de frente al disco, sin giro automático (para que siempre se vea redonda y se lean los nombres)
-    opts.autoRotate = false; controls.autoRotate = false; document.getElementById('btnAutoRot')?.classList.remove('active');
-    // encuadre: que todo el círculo quepa en pantalla
-    let ext = 1; Object.values(window._roundPos || {}).forEach(p => { ext = Math.max(ext, Math.hypot(p.x, p.y)); });
-    const half = Math.tan(camera.fov * Math.PI / 360), z = (ext + 8) / (half * Math.min(1, camera.aspect)) * 1.02;
-    if (window.gsap) { gsap.to(camera.position, { x: 0, y: 0, z, duration: 1.6, ease: 'power2.inOut' }); gsap.to(controls.target, { x: 0, y: 0, z: 0, duration: 1.6 }); }
-    else { camera.position.set(0, 0, z); controls.target.set(0, 0, 0); }
+    window.setLayout('niveles3d');
+    opts.autoRotate = true; document.getElementById('btnAutoRot')?.classList.add('active');
+    Niveles.setStep(0);
   }, 60);
 
   // =====================================================================
@@ -3435,10 +3580,13 @@ window.onerror = function(msg, url, line, col, error) {
       if (b.id && b.id.startsWith("btnLayout")) b.classList.remove("active");
     });
     if (type === 'hyperbolic') document.getElementById("btnLayoutHyp")?.classList.add("active");
+    if (type === 'niveles3d') document.getElementById("btnLayoutNiv")?.classList.add("active");
+    if (window.Niveles) Niveles.show(type === 'niveles3d');
     if (type === 'clustered') document.getElementById("btnLayoutClust")?.classList.add("active");
     if (type === 'concentric') document.getElementById("btnLayoutConc")?.classList.add("active");
     if (type === 'plano2d') document.getElementById("btnLayoutPlano")?.classList.add("active");
     ['forceatlas', 'circular', 'radial'].forEach(k => document.getElementById('gpLayout' + k)?.classList.toggle('active', k === type));
+    if (type !== 'niveles3d' && window._nivStep) { window._nivStep = 0; }
     if (type === 'circular' || type === 'radial' || type === 'plano2d') {
       // vistas planas: de frente a la cámara y sin giro
       opts.autoRotate = false;
@@ -3493,6 +3641,7 @@ window.onerror = function(msg, url, line, col, error) {
       if (type === 'forceatlas' || type === 'circular' || type === 'radial') {
         const p = gephiLayoutPos(n, type); tx = p.x; ty = p.y; tz = p.z;
       }
+      if (type === 'niveles3d' && window.Niveles) { const p = Niveles.pos(n); tx = p.x; ty = p.y; tz = p.z; }
 
       if (window.gsap) {
         gsap.to(n.sprite.position, {
@@ -4779,7 +4928,7 @@ window.viewInRhinoWeb = (identifier, isUrl = false) => {
     particleUniforms.uTime.value = elapsedTime;
 
     if (opts.autoRotate && currentMorph < 0.35) {
-      networkGroup.rotation.y += delta * 0.015;
+      networkGroup.rotation.y += delta * (opts.layout === 'niveles3d' ? 0.07 : 0.015);
     } else {
       networkGroup.rotation.y = 0;
     }
